@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================================
+       DIMENSIONES FÍSICAS (todas en metros y kg)
+       ============================================================ -->
+
+  <!-- Chasis (body, sin ruedas ni bumpers) -->
+  <xacro:property name="chassis_length" value="0.370"/>   <!-- ~410 mm sin bumpers -->
+  <xacro:property name="chassis_width"  value="0.240"/>   <!-- ~288 mm sin sobresaltos -->
+  <xacro:property name="chassis_height" value="0.065"/>   <!-- altura del cuerpo -->
+  <xacro:property name="chassis_mass"   value="4.0"/>     <!-- 5 kg total - 4 ruedas -->
+
+  <!-- Geometría Ackermann -->
+  <xacro:property name="wheelbase"       value="0.251"/>  <!-- distancia entre ejes -->
+  <xacro:property name="wheel_track"     value="0.238"/>  <!-- ancho de vía -->
+  <xacro:property name="front_axle_x"   value="${wheelbase / 2.0}"/>
+  <xacro:property name="rear_axle_x"    value="${-wheelbase / 2.0}"/>
+  <xacro:property name="wheel_y_offset" value="${wheel_track / 2.0}"/>
+
+  <!-- Ruedas -->
+  <xacro:property name="wheel_radius"   value="0.052"/>   <!-- radio -->
+  <xacro:property name="wheel_width"    value="0.050"/>   <!-- ancho del cilindro -->
+  <xacro:property name="wheel_mass"     value="0.25"/>    <!-- masa por rueda -->
+
+  <!-- Altura del centro de chasis sobre el suelo (aprox CoG) -->
+  <xacro:property name="chassis_z_offset" value="${wheel_radius + 0.020 + chassis_height / 2.0}"/>
+  <!-- = 0.052 + 0.020 (holgura suspensión) + 0.0325 = ~0.105 m -->
+
+  <!-- Límites de dirección (40° = 0.6981 rad) -->
+  <xacro:property name="max_steer_angle"     value="0.6981"/>
+  <xacro:property name="steer_effort"        value="10.0"/>   <!-- Nm -->
+  <xacro:property name="steer_vel_limit"     value="2.0"/>    <!-- rad/s -->
+
+  <!-- Límites de velocidad de ruedas -->
+  <!-- v_max / r = 4.0 / 0.052 ≈ 77 rad/s → ponemos margen a 100 -->
+  <xacro:property name="wheel_vel_limit"     value="100.0"/>  <!-- rad/s -->
+
+  <!-- ============================================================
+       MACROS DE INERCIA
+       ============================================================ -->
+
+  <!-- Caja sólida homogénea -->
+  <xacro:macro name="box_inertia" params="m l w h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${m / 12.0 * (w*w + h*h)}"  ixy="0.0" ixz="0.0"
+        iyy="${m / 12.0 * (l*l + h*h)}"  iyz="0.0"
+        izz="${m / 12.0 * (l*l + w*w)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Cilindro sólido (eje = Z en definición, se rota en el joint) -->
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${m / 12.0 * (3.0*r*r + h*h)}"  ixy="0.0" ixz="0.0"
+        iyy="${m / 12.0 * (3.0*r*r + h*h)}"  iyz="0.0"
+        izz="${m / 2.0  * r*r}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Esfera sólida (para links virtuales mínimos) -->
+  <xacro:macro name="sphere_inertia" params="m r">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia
+        ixx="${2.0/5.0 * m * r*r}" ixy="0.0" ixz="0.0"
+        iyy="${2.0/5.0 * m * r*r}" iyz="0.0"
+        izz="${2.0/5.0 * m * r*r}"/>
+    </inertial>
+  </xacro:macro>
+
+</robot>

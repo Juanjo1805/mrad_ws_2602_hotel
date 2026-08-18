@@ -1,0 +1,61 @@
+# =============================================================================
+#  ackermann_controllers.yaml
+#  hotel_description/config/
+#
+#  API activa en ROS 2 Jazzy (ros2_controllers >= 4.x):
+#    steering_joints_names      (no front_steering_joints_names)
+#    traction_joints_names      (no rear_wheels_names)
+#    traction_track_width       (no rear_wheel_track / front_wheel_track)
+#    steering_track_width       (no rear_wheel_track / front_wheel_track)
+#    traction_wheels_radius     ✓ (correcto desde la iteración anterior)
+# =============================================================================
+
+controller_manager:
+  ros__parameters:
+    update_rate: 20
+
+    ackermann_steering_controller:
+      type: ackermann_steering_controller/AckermannSteeringController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+# -----------------------------------------------------------------------------
+ackermann_steering_controller:
+  ros__parameters:
+
+    # ── Geometría ──────────────────────────────────────────────────────────
+    wheelbase:              0.251   # m — distancia entre ejes
+    traction_track_width:   0.238   # m — ancho de vía eje trasero (tracción)
+    steering_track_width:   0.238   # m — ancho de vía eje delantero (dirección)
+    traction_wheels_radius: 0.052   # m — radio ruedas de tracción
+
+    # ── Joints de dirección (posición) ────────────────────────────────────
+    steering_joints_names:
+      - front_left_steering_joint
+      - front_right_steering_joint
+
+    # ── Joints de tracción trasera (velocidad) ────────────────────────────
+    traction_joints_names:
+      - rear_left_wheel_joint
+      - rear_right_wheel_joint
+
+    # ── Cinemática ────────────────────────────────────────────────────────
+    open_loop: false
+
+    # ── Referencia ────────────────────────────────────────────────────────
+    # Tópico: /ackermann_steering_controller/reference  (TwistStamped)
+    #   linear.x  → velocidad deseada [m/s]
+    #   angular.z → velocidad angular [rad/s]
+    reference_timeout: 1.0
+
+    # ── Odometría ─────────────────────────────────────────────────────────
+    odom_frame_id:  odom
+    base_frame_id:  base_link
+    enable_odom_tf: true
+    publish_rate:   50.0
+
+    velocity_rolling_window_size: 10
+
+    pose_covariance_diagonal:  [0.001, 0.001, 0.001, 0.001, 0.001, 0.010]
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.010]

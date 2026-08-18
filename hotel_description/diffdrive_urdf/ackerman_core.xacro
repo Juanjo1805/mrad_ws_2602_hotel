@@ -1,0 +1,240 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Example link -->
+    <xacro:include filename="inertial_macros.xacro"/>
+
+    <xacro:property name="rad_w" value="0.052"/>
+    <xacro:property name="le_w" value="0.053"/>
+    <xacro:property name="ly" value="0.125"/>
+    <xacro:property name="lx" value="0.375"/>
+    <xacro:property name="lz" value="0.12"/>
+    <xacro:property name="lx_st" value="0.02"/>
+    <xacro:property name="ly_st" value="${ly*3/2}"/>
+    <xacro:property name="lz_st" value="0.03 "/>
+    <xacro:property name="lx_arm" value="0.02"/>
+    <xacro:property name="ly_arm" value="${0.01}"/>
+    <xacro:property name="lz_arm" value="0.05"/>
+    
+    <xacro:macro name="box_macro" params="
+      name
+      x y z
+      mass
+      material">
+
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${x} ${y} ${z}"/>
+        </geometry>
+        <material name="${material}"/>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${x} ${y} ${z}"/>
+        </geometry>
+      </collision>
+
+      <xacro:inertial_box mass="${mass}" x="${x}" y="${y}" z="${z}">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </xacro:inertial_box>
+    </link>
+    </xacro:macro>
+
+    <xacro:macro name="wheel_macro" params="
+      name
+      radius
+      width
+      mass
+      material">
+
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${radius}" length="${width}"/>
+        </geometry>
+        <material name="${material}"/>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${radius}" length="${width}"/>
+        </geometry>
+      </collision>
+
+      <xacro:inertial_cylinder
+          mass="${mass}"
+          radius="${radius}"
+          length="${width}">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </xacro:inertial_cylinder>
+    </link>
+
+  </xacro:macro>
+
+    <!-- Example link -->
+    <link name="base_link">
+    </link>
+
+    <joint name="base_link_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="chassis"/>
+        <origin xyz="0 0 0"/>    
+    </joint>
+    
+    <!-- chassis link -->
+    <xacro:box_macro
+    name="chassis"
+    x="${lx}"
+    y="${ly}"
+    z="${lz}"
+    mass="5.0"
+    material="blue"/>
+
+        <!-- steering link joint -->
+    <joint name="steering_link_joint" type="fixed">
+        <parent link="chassis"/>
+        <child link="steering"/>
+        <origin xyz="${lx/3} 0.0 -${(lz + lz_st)/2}" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>    
+        <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+
+      <!-- Steering link -->
+    <xacro:box_macro
+    name="steering"
+    x="${lx_st}"
+    y="${ly_st}"
+    z="${lz_st}"
+    mass="1.0"
+    material="orange"/>
+
+    <!-- non-steering link joint -->
+    <joint name="nonsteering_link_joint" type="fixed">
+        <parent link="chassis"/>
+        <child link="nonsteering"/>
+        <origin xyz="-${lx/3} 0.0 -${(lz + lz_st)/2}" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>    
+        <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+
+      <!-- Nonsteering link -->
+    <xacro:box_macro
+    name="nonsteering"
+    x="${lx_st}"
+    y="${ly_st}"
+    z="${lz_st}"
+    mass="1.0"
+    material="orange"/>
+
+    <!-- Steering arm left joint-->
+    <joint name="left_steering_arm_joint" type="revolute">
+        <parent link="steering"/>
+        <child link="left_steering_arm"/>
+        <origin xyz="0 ${ly_st/2} 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-0.6" upper="0.6" effort="10" velocity="1"/>
+    </joint>
+
+    <!-- Steering arm front left -->
+    <xacro:box_macro
+    name="left_steering_arm"
+    x="${lx_arm}"
+    y="${ly_arm}"
+    z="${lz_arm}"
+    mass="1.0"
+    material="orange"/>
+
+    <!-- left front wheel joint -->
+    <joint name="left_front_wheel_spinning_joint" type="continuous">
+        <parent link="left_steering_arm"/>
+        <child link="left_front_wheel"/>
+        <origin xyz="0.0 ${ly_arm/2+le_w/2} 0.0" rpy="-${pi/2} 0 0"/>
+        <axis xyz="0 0 1"/>    
+        <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+
+    <!-- left front wheel link -->
+    <xacro:wheel_macro
+    name="left_front_wheel"
+    radius="${rad_w}"
+    width="${le_w}"
+    mass="0.1"
+    material="black"/>
+
+        <!-- left back wheel joint -->
+    <joint name="left_back_wheel_joint" type="continuous">
+        <parent link="nonsteering"/>
+        <child link="left_back_wheel"/>
+        <origin xyz="0.0 ${ly_st/2+le_w/2} 0.0" rpy="-${pi/2} 0 0"/>
+        <axis xyz="0 0 1"/>    
+        <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+
+    <!-- left back wheel link -->
+    <xacro:wheel_macro
+    name="left_back_wheel"
+    radius="${rad_w}"
+    width="${le_w}"
+    mass="0.1"
+    material="black"/>
+
+        <!-- Steering arm left joint-->
+    <joint name="right_steering_arm_joint" type="revolute">
+        <parent link="steering"/>
+        <child link="right_steering_arm"/>
+        <origin xyz="0 -${ly_st/2} 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-0.6" upper="0.6" effort="10" velocity="1"/>
+    </joint>
+
+    <!-- Steering arm front left -->
+    <xacro:box_macro
+    name="right_steering_arm"
+    x="${lx_arm}"
+    y="${ly_arm}"
+    z="${lz_arm}"
+    mass="1.0"
+    material="orange"/>
+
+    <!-- right front wheel joint -->
+    <joint name="right_front_wheel_spinning_joint" type="continuous">
+        <parent link="right_steering_arm"/>
+        <child link="right_front_wheel"/>
+        <origin xyz="0.0 -${ly_arm/2+le_w/2} 0.0" rpy="${pi/2} 0 0"/>
+        <axis xyz="0 0 -1"/> 
+        <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+
+    <!-- right front wheel link -->
+    <xacro:wheel_macro
+    name="right_front_wheel"
+    radius="${rad_w}"
+    width="${le_w}"
+    mass="0.1"
+    material="black"/>
+
+
+        <!-- right back wheel joint -->
+    <joint name="right_back_wheel_joint" type="continuous">
+        <parent link="nonsteering"/>
+        <child link="right_back_wheel"/>
+        <origin xyz="0.0 -${ly_st/2+le_w/2} 0.0" rpy="${pi/2} 0 0"/>
+        <axis xyz="0 0 -1"/> 
+        <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+
+    <!-- right back wheel link -->
+    <xacro:wheel_macro
+    name="right_back_wheel"
+    radius="${rad_w}"
+    width="${le_w}"
+    mass="0.1"
+    material="black"/>
+
+</robot>

@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" >
+    <xacro:macro name="hotel_camera" params="name topic frame">
+    <link name="${frame}">
+    <visual>
+        <geometry>
+        <box size="0.03 0.03 0.03"/>
+        </geometry>
+        <material name="red"/>
+    </visual>
+    <collision>
+        <geometry>
+        <box size="0.03 0.03 0.03"/>
+        </geometry>
+    </collision>
+    <inertial>
+        <mass value="0.05"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+    </inertial>
+    </link>
+
+    <gazebo reference="${frame}">
+    <sensor name="${name}" type="camera">
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <visualize>false</visualize>
+        <topic>${topic}</topic>
+        <gz_frame_id>${frame}</gz_frame_id>
+
+        <camera>
+        <horizontal_fov>1.047</horizontal_fov>
+        <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+        </image>
+        <clip>
+            <near>0.05</near>
+            <far>50</far>
+        </clip>
+        </camera>
+    </sensor>
+    </gazebo>
+    </xacro:macro>
+
+    <xacro:hotel_camera name="front_camera" topic="camera/image" frame="camera_link"/>
+    <xacro:hotel_camera name="left_lane_camera" topic="left_camera/image" frame="left_camera_link"/>
+    <xacro:hotel_camera name="right_lane_camera" topic="right_camera/image" frame="right_camera_link"/>
+
+    <joint name="camera_chassis_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="camera_link"/>
+    <!-- Mounted beyond the front edge of the 0.4 m chassis, tilted toward the road. -->
+    <origin xyz="0.24 0 0.18" rpy="0 0.45 0"/>
+    </joint>
+
+    <joint name="left_camera_chassis_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="left_camera_link"/>
+    <!-- Lane cameras stay outside the body but still look mostly forward. -->
+    <origin xyz="0.24 0.24 0.18" rpy="0 0.45 0.45"/>
+    </joint>
+
+    <joint name="right_camera_chassis_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="right_camera_link"/>
+    <!-- Lane cameras stay outside the body but still look mostly forward. -->
+    <origin xyz="0.24 -0.24 0.18" rpy="0 0.45 -0.45"/>
+    </joint>
+
+</robot>

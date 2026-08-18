@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="hotel_ackermann">
+
+  <!--
+    Hotel Ackermann Robot - ROS 2 Jazzy + Gazebo Harmonic
+    Geometría basada en vehículo RC de escala 1/10:
+      Wheelbase: 251 mm | Track: 238 mm | Wheel R: 52 mm
+      Masa total: 5 kg  | Dirección: delantera | Tracción: AWD
+
+    Jerarquía de frames:
+      base_link
+      ├── chassis_link          (fixed)
+      ├── front_left_steering_link   (revolute: yaw ±40°)
+      │   └── front_left_wheel_link  (continuous: rot Y)
+      ├── front_right_steering_link  (revolute: yaw ±40°)
+      │   └── front_right_wheel_link (continuous: rot Y)
+      ├── rear_left_wheel_link       (continuous: rot Y)
+      ├── rear_right_wheel_link      (continuous: rot Y)
+      ├── lidar_link            (fixed)
+      └── imu_link              (fixed)
+  -->
+
+  <xacro:include filename="properties.xacro"/>
+  <xacro:include filename="robot_core.xacro"/>
+  <xacro:include filename="lidar.xacro"/>
+  <xacro:include filename="imu.xacro"/>
+  <xacro:include filename="ros2_control.xacro"/>
+
+</robot>

@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- ===================================================== -->
+    <!--  GZ-SIM IMU SYSTEM (attached to the robot model)       -->
+    <!--  Esto evita modificar el world.sdf                     -->
+    <!-- ===================================================== -->
+    <gazebo>
+        <plugin filename="gz-sim-imu-system"
+                name="gz::sim::systems::Imu"/>
+    </gazebo>
+
+    <!-- ============================= -->
+    <!-- IMU LINK                      -->
+    <!-- ============================= -->
+
+    <link name="imu_link">
+        <visual>
+            <geometry>
+                <box size="0.02 0.02 0.01"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0 0 1 1"/>
+            </material>
+        </visual>
+
+        <collision>
+            <geometry>
+                <box size="0.02 0.02 0.01"/>
+            </geometry>
+        </collision>
+
+        <!-- Usamos la macro de inercia que ya tienes -->
+        <xacro:inertial_box mass="0.02" x="0.02" y="0.02" z="0.01">
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </xacro:inertial_box>
+    </link>
+
+    <!-- ============================= -->
+    <!-- IMU JOINT (fijo al chassis)   -->
+    <!-- ============================= -->
+
+    <joint name="imu_joint" type="fixed">
+        <parent link="chassis"/>
+        <child link="imu_link"/>
+        <!-- Encima del robot -->
+        <origin xyz="0 0 ${lz/2 + 0.02}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================= -->
+    <!-- GAZEBO IMU SENSOR             -->
+    <!-- ============================= -->
+
+    <gazebo reference="imu_link">
+        <sensor name="imu_sensor" type="imu">
+            <always_on>true</always_on>
+            <update_rate>100</update_rate>
+            <visualize>false</visualize>
+
+            <!-- Topic en Gazebo Transport (luego lo puenteas a ROS) -->
+            <topic>imu</topic>
+
+            <imu>
+                <angular_velocity>
+                    <x>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>0.0002</stddev>
+                        </noise>
+                    </x>
+                    <y>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>0.0002</stddev>
+                        </noise>
+                    </y>
+                    <z>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>0.0002</stddev>
+                        </noise>
+                    </z>
+                </angular_velocity>
+
+                <linear_acceleration>
+                    <x>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>0.017</stddev>
+                        </noise>
+                    </x>
+                    <y>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>0.017</stddev>
+                        </noise>
+                    </y>
+                    <z>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>0.017</stddev>
+                        </noise>
+                    </z>
+                </linear_acceleration>
+            </imu>
+
+        </sensor>
+    </gazebo>
+
+</robot>

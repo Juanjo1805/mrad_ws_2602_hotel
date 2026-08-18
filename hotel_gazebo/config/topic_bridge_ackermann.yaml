@@ -1,0 +1,54 @@
+# =============================================================================
+#  topic_bridge_ackermann.yaml
+#  hotel_gazebo/config/
+#
+#  Bridge de tópicos Gazebo Harmonic ↔ ROS 2 para el robot Ackermann.
+#  Nota: los tópicos de ros2_control (joint_states, odom, cmd) NO necesitan
+#  bridge — gz_ros2_control los publica/suscribe directamente en ROS 2.
+# =============================================================================
+
+# ── Reloj de simulación ────────────────────────────────────────────────────
+- ros_topic_name: "/clock"
+  gz_topic_name:  "/clock"
+  ros_type_name:  "rosgraph_msgs/msg/Clock"
+  gz_type_name:   "gz.msgs.Clock"
+  direction:      GZ_TO_ROS
+
+# ── LiDAR ─────────────────────────────────────────────────────────────────
+- ros_topic_name: "/scan"
+  gz_topic_name:  "/scan"
+  ros_type_name:  "sensor_msgs/msg/LaserScan"
+  gz_type_name:   "gz.msgs.LaserScan"
+  direction:      GZ_TO_ROS
+
+# ── IMU ────────────────────────────────────────────────────────────────────
+- ros_topic_name: "/imu"
+  gz_topic_name:  "/imu"
+  ros_type_name:  "sensor_msgs/msg/Imu"
+  gz_type_name:   "gz.msgs.IMU"
+  direction:      GZ_TO_ROS
+
+# ── Camaras de carril ─────────────────────────────────────────────────────
+- ros_topic_name: "/left_camera/image"
+  gz_topic_name:  "left_camera/image"
+  ros_type_name:  "sensor_msgs/msg/Image"
+  gz_type_name:   "gz.msgs.Image"
+  direction:      GZ_TO_ROS
+
+- ros_topic_name: "/left_camera/camera_info"
+  gz_topic_name:  "left_camera/camera_info"
+  ros_type_name:  "sensor_msgs/msg/CameraInfo"
+  gz_type_name:   "gz.msgs.CameraInfo"
+  direction:      GZ_TO_ROS
+
+- ros_topic_name: "/right_camera/image"
+  gz_topic_name:  "right_camera/image"
+  ros_type_name:  "sensor_msgs/msg/Image"
+  gz_type_name:   "gz.msgs.Image"
+  direction:      GZ_TO_ROS
+
+- ros_topic_name: "/right_camera/camera_info"
+  gz_topic_name:  "right_camera/camera_info"
+  ros_type_name:  "sensor_msgs/msg/CameraInfo"
+  gz_type_name:   "gz.msgs.CameraInfo"
+  direction:      GZ_TO_ROS

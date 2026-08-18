@@ -1,0 +1,209 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================================
+       MACRO: link de rueda (cilindro visual + colisión)
+       El cilindro se rota π/2 sobre X para que su eje quede en Y
+       ============================================================ -->
+  <xacro:macro name="wheel_link" params="name">
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="dark_gray">
+          <color rgba="0.15 0.15 0.15 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <!-- Inercia del cilindro (eje de giro = Y → h = wheel_width, r = wheel_radius) -->
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <!--
+          Cilindro eje Y: ixx = iyy = m/12*(3r²+h²),  izz = m/2*r²
+          Con rpy π/2 sobre X en visual, el eje de spin real del joint es Y del link.
+          La inercia se define en el frame del link (sin la rotación visual).
+        -->
+        <inertia
+          ixx="${wheel_mass / 12.0 * (3.0*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+          ixy="0.0" ixz="0.0"
+          iyy="${wheel_mass / 2.0 * wheel_radius*wheel_radius}"
+          iyz="0.0"
+          izz="${wheel_mass / 12.0 * (3.0*wheel_radius*wheel_radius + wheel_width*wheel_width)}"/>
+      </inertial>
+    </link>
+
+    <!-- Fricción en Gazebo Harmonic (SDF 1.10): anidado correcto -->
+    <gazebo reference="${name}">
+      <collision>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <kp>1000000.0</kp>
+              <kd>1.0</kd>
+              <min_depth>0.001</min_depth>
+              <max_vel>0.1</max_vel>
+            </ode>
+          </contact>
+        </surface>
+      </collision>
+      <material>Gazebo/Black</material>
+    </gazebo>
+  </xacro:macro>
+
+  <!-- ============================================================
+       BASE LINK  (frame de referencia del robot, al nivel del suelo)
+       ============================================================ -->
+  <link name="base_link"/>
+
+  <!-- ============================================================
+       CHASIS
+       ============================================================ -->
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/>
+    <child  link="chassis_link"/>
+    <origin xyz="0 0 ${chassis_z_offset}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="chassis_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <material name="body_blue">
+        <color rgba="0.10 0.40 0.85 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertia
+      m="${chassis_mass}"
+      l="${chassis_length}"
+      w="${chassis_width}"
+      h="${chassis_height}"/>
+  </link>
+
+  <gazebo reference="chassis_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <!-- ============================================================
+       EJE DELANTERO IZQUIERDO
+       joint de dirección (revolute Z) → hub virtual → joint de rueda (continuous Y)
+       ============================================================ -->
+
+  <!-- Steering hub FL (link virtual de masa mínima) -->
+  <joint name="front_left_steering_joint" type="revolute">
+    <parent link="base_link"/>
+    <child  link="front_left_steering_link"/>
+    <origin xyz="${front_axle_x} ${wheel_y_offset} ${wheel_radius}" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-max_steer_angle}" upper="${max_steer_angle}"
+           effort="${steer_effort}" velocity="${steer_vel_limit}"/>
+    <dynamics damping="0.05" friction="0.05"/>
+  </joint>
+
+  <link name="front_left_steering_link">
+    <!-- Link virtual: masa/inercia mínimas para no romper el solver -->
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0"
+               iyy="1e-5" iyz="0"
+               izz="1e-5"/>
+    </inertial>
+  </link>
+
+  <!-- Rueda FL (hijo del hub de dirección) -->
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="front_left_steering_link"/>
+    <child  link="front_left_wheel_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="5.0" velocity="${wheel_vel_limit}"/>
+    <dynamics damping="0.02" friction="0.02"/>
+  </joint>
+
+  <xacro:wheel_link name="front_left_wheel_link"/>
+
+  <!-- ============================================================
+       EJE DELANTERO DERECHO
+       ============================================================ -->
+
+  <joint name="front_right_steering_joint" type="revolute">
+    <parent link="base_link"/>
+    <child  link="front_right_steering_link"/>
+    <origin xyz="${front_axle_x} ${-wheel_y_offset} ${wheel_radius}" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-max_steer_angle}" upper="${max_steer_angle}"
+           effort="${steer_effort}" velocity="${steer_vel_limit}"/>
+    <dynamics damping="0.05" friction="0.05"/>
+  </joint>
+
+  <link name="front_right_steering_link">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0"
+               iyy="1e-5" iyz="0"
+               izz="1e-5"/>
+    </inertial>
+  </link>
+
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="front_right_steering_link"/>
+    <child  link="front_right_wheel_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="5.0" velocity="${wheel_vel_limit}"/>
+    <dynamics damping="0.02" friction="0.02"/>
+  </joint>
+
+  <xacro:wheel_link name="front_right_wheel_link"/>
+
+  <!-- ============================================================
+       EJE TRASERO IZQUIERDO  (tracción principal + odometría)
+       ============================================================ -->
+
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child  link="rear_left_wheel_link"/>
+    <origin xyz="${rear_axle_x} ${wheel_y_offset} ${wheel_radius}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="5.0" velocity="${wheel_vel_limit}"/>
+    <dynamics damping="0.02" friction="0.02"/>
+  </joint>
+
+  <xacro:wheel_link name="rear_left_wheel_link"/>
+
+  <!-- ============================================================
+       EJE TRASERO DERECHO
+       ============================================================ -->
+
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child  link="rear_right_wheel_link"/>
+    <origin xyz="${rear_axle_x} ${-wheel_y_offset} ${wheel_radius}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="5.0" velocity="${wheel_vel_limit}"/>
+    <dynamics damping="0.02" friction="0.02"/>
+  </joint>
+
+  <xacro:wheel_link name="rear_right_wheel_link"/>
+
+</robot>
