@@ -9,8 +9,11 @@ from std_msgs.msg import Float32
 
 
 PARAMETERS = (
+    # Angulo diagonal usado para medir la inclinacion respecto a la pared.
     ('theta_deg', 48.0),
+    # Distancia hacia adelante usada para predecir el error futuro, en metros.
     ('lookahead_dist', 1.5),
+    # Distancia objetivo que el robot debe mantener con la pared, en metros.
     ('desired_distance', 0.72),
 )
 

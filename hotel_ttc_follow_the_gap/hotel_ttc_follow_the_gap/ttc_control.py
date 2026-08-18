@@ -7,12 +7,19 @@ from std_msgs.msg import Float32
 
 
 PARAMETERS = (
+    # TTC de referencia para reducir velocidad cuando hay riesgo cercano.
     ('ttc_min', 0.6),
+    # Velocidad maxima deseada cuando el camino esta libre, en m/s.
     ('v_max', 1.6),
+    # Velocidad minima permitida cuando el robot esta habilitado, en m/s.
     ('v_min', 0.15),
+    # Ganancia proporcional que convierte el angulo del gap en giro.
     ('kp_steering', 1.2),
+    # Limite maximo del comando de giro, en rad/s.
     ('max_steering', 2.5),
+    # Reduccion de velocidad al girar; mas alto = mas lento en curvas.
     ('steering_slowdown', 1.5),
+    # Zona muerta del angulo; ignora correcciones pequenas para evitar ruido.
     ('angle_deadband', 0.05),
 )
 

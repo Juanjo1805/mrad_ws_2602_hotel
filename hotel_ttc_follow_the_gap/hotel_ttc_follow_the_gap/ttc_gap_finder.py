@@ -10,14 +10,23 @@ from std_msgs.msg import Float32
 
 
 PARAMETERS = (
+    # Tiempo minimo permitido antes de colisionar; mas alto = mas conservador.
     ('ttc_min', 0.6),
+    # Campo de vision usado del LiDAR en grados; reduce lecturas laterales.
     ('fov_deg', 120.0),
+    # Radio base de seguridad alrededor de obstaculos cercanos, en metros.
     ('bubble_base', 0.35),
+    # Cuanto crece la burbuja de seguridad segun la velocidad del robot.
     ('bubble_vel_k', 0.4),
+    # Distancia minima libre para considerar un punto como seguro, en metros.
     ('min_clearance', 0.10),
+    # Suavizado del angulo elegido; 0 responde rapido, 1 mantiene el anterior.
     ('smooth_alpha', 0.20),
+    # Profundidad minima esperada de un gap para no tratarlo como callejon.
     ('min_depth_threshold', 0.9),
+    # Peso de penalizacion para gaps poco profundos o que se cierran rapido.
     ('deadend_weight', 1.1),
+    # Ancho angular minimo de un gap valido, en grados.
     ('min_gap_width_deg', 3.0),
 )
 

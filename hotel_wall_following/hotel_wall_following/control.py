@@ -11,11 +11,17 @@ from std_msgs.msg import Float32
 
 
 PARAMETERS = (
+    # Ganancia proporcional: corrige segun el error actual contra la pared.
     ('kp', 1.1),
+    # Ganancia derivativa: corrige segun que tan rapido cambia el error.
     ('kd', 1.5),
+    # Limite maximo del giro enviado al robot, en rad/s.
     ('max_steering', 2.2),
+    # Velocidad maxima cuando el robot va bien alineado con la pared, en m/s.
     ('max_velocity', 1.7),
+    # Velocidad minima para no frenar demasiado durante el seguimiento, en m/s.
     ('min_velocity', 1.33),
+    # Ganancia que reduce velocidad cuando aumenta el error lateral.
     ('kv', 2.1),
 )
 
