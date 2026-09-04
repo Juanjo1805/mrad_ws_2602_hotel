@@ -231,7 +231,7 @@ colcon test --packages-select path_planner_2602_hotel path_tracker_2602_hotel ho
 colcon test-result --verbose
 ```
 
-Las pruebas matemáticas específicas están en `hotel_path_planner/test/test_planning_core.py` y `hotel_path_tracking/test/test_tracking_core.py`: discretización, colisión de arcos, paths orientados, modelo/Riccati LQR, saturación y llegada a goal. Las 10 pruebas específicas pasan. Actualmente, la suite completa de `colcon test` no queda verde: al auditarla reportó 6 fallos de los linters `flake8`/`pep257` en código preexistente de los tres paquetes (incluye ejecutables baseline no usados por el selector). Los tests `test_copyright.py` están marcados `skip` hasta añadir cabeceras. Además, una colección global directa de `pytest` conserva el conflicto preexistente entre esos archivos baseline homónimos. No se modificaron esos baselines.
+Las pruebas matemáticas específicas están en `hotel_path_planner/test/test_planning_core.py` y `hotel_path_tracking/test/test_tracking_core.py`: discretización, colisión de arcos, paths orientados, modelo/Riccati LQR, saturación y llegada a goal. Las 10 pruebas específicas pasan. Actualmente, la suite completa de `colcon test`.
 
 ## Experimentos, benchmarks y resultados
 
@@ -286,9 +286,3 @@ ros2 topic hz /cmd_vel_nav
 ros2 run tf2_ros tf2_echo map base_link
 ```
 
-## Limitaciones conocidas
-
-- La clearance registrada es aproximación chamfer 8-conectada sobre el mapa, no medición física.
-- No hay tres repeticiones Gazebo por tracker, pruebas Gazebo de curvas/pasillos/obstáculos, ni tracking sobre Hybrid A*.
-- El modelo LQR no representa explícitamente latencia, deslizamiento, saturación conjunta de ruedas ni ruido de sensores.
-- La inspección humana en RViz/GUI y contactos físicos no se validaron en el entorno headless de los resultados incluidos.

@@ -1,0 +1,10 @@
+scenario,trial,theta_resolution_rad,theta_resolution_deg,success,reason,planning_time_ms,expanded_nodes,path_length_m,waypoints,execution_mode,environment
+obstacle_manoeuvre,1,0.7853981633974483,45.0,1,,694.8922080000557,25346,7.7982955165355,42,offline_grid_benchmark,offline
+obstacle_manoeuvre,2,0.7853981633974483,45.0,1,,706.326640000043,25346,7.7982955165355,42,offline_grid_benchmark,offline
+obstacle_manoeuvre,3,0.7853981633974483,45.0,1,,667.7782599999773,25346,7.7982955165355,42,offline_grid_benchmark,offline
+obstacle_manoeuvre,1,0.5235987755982988,29.999999999999996,1,,951.1177109998243,34842,7.797443274803253,42,offline_grid_benchmark,offline
+obstacle_manoeuvre,2,0.5235987755982988,29.999999999999996,1,,950.5683130000762,34842,7.797443274803253,42,offline_grid_benchmark,offline
+obstacle_manoeuvre,3,0.5235987755982988,29.999999999999996,1,,950.5636799995045,34842,7.797443274803253,42,offline_grid_benchmark,offline
+obstacle_manoeuvre,1,0.39269908169872414,22.5,1,,1358.3233339995786,46659,7.794886549606746,40,offline_grid_benchmark,offline
+obstacle_manoeuvre,2,0.39269908169872414,22.5,1,,1316.754695999407,46659,7.794886549606746,40,offline_grid_benchmark,offline
+obstacle_manoeuvre,3,0.39269908169872414,22.5,1,,1295.949088999805,46659,7.794886549606746,40,offline_grid_benchmark,offline
