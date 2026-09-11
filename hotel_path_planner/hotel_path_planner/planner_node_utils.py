@@ -16,7 +16,14 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 import tf2_ros
 from tf2_geometry_msgs import do_transform_pose
 
-from .planning_core import GridMap, PlannerResult, Pose2D, quaternion_to_yaw, yaw_to_quaternion
+from .planning_core import (
+    GridMap,
+    PlannerResult,
+    Pose2D,
+    densify_path,
+    quaternion_to_yaw,
+    yaw_to_quaternion,
+)
 
 
 PLANNER_COLUMNS = [
@@ -32,15 +39,21 @@ def map_qos() -> QoSProfile:
                       durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
+def path_qos() -> QoSProfile:
+    """Keep the latest plan for a tracker that starts after the planner."""
+    return QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
+
+
 def pose_to_core(pose: PoseStamped) -> Pose2D:
     return Pose2D(pose.pose.position.x, pose.pose.position.y, quaternion_to_yaw(pose.pose.orientation))
 
 
-def result_to_path(result: PlannerResult, frame_id: str, stamp) -> Path:
+def result_to_path(result: PlannerResult, frame_id: str, stamp, path_resolution: float) -> Path:
     path = Path()
     path.header.frame_id = frame_id
     path.header.stamp = stamp
-    for item in result.poses:
+    for item in densify_path(result.poses, path_resolution):
         pose = PoseStamped()
         pose.header = path.header
         pose.pose.position.x = float(item.x)
@@ -87,6 +100,7 @@ class PlannerNodeBase(rclpy.node.Node):
         # 0.25 m is the enclosing circular radius of the 0.40 x 0.44 m chassis.
         self.declare_parameter("inflate_radius", 0.25)
         self.declare_parameter("traversal_cost_weight", 0.0)
+        self.declare_parameter("path_resolution", 0.05)
         self.declare_parameter("scenario", "manual")
         self.declare_parameter("trial", 0)
         # Set to ``gazebo`` for the supplied simulator, ``robot`` for a
@@ -94,7 +108,8 @@ class PlannerNodeBase(rclpy.node.Node):
         self.declare_parameter("environment", "gazebo")
         self.declare_parameter("results_csv", "results/planner_results.csv")
 
-        self.path_pub = self.create_publisher(Path, self.get_parameter("path_topic").value, 10)
+        self.path_pub = self.create_publisher(
+            Path, self.get_parameter("path_topic").value, path_qos())
         self.map_sub = self.create_subscription(OccupancyGrid, self.get_parameter("map_topic").value,
                                                 self.on_map, map_qos())
         self.goal_sub = self.create_subscription(PoseStamped, self.get_parameter("goal_topic").value,
@@ -107,12 +122,20 @@ class PlannerNodeBase(rclpy.node.Node):
 
     def on_map(self, msg: OccupancyGrid) -> None:
         try:
+            global_frame = str(self.get_parameter("global_frame").value)
+            if not msg.header.frame_id:
+                raise ValueError("OccupancyGrid.header.frame_id is empty")
+            if msg.header.frame_id != global_frame:
+                raise ValueError(
+                    f"map frame '{msg.header.frame_id}' differs from global_frame '{global_frame}'"
+                )
             occupancy = np.asarray(msg.data, dtype=np.int16).reshape((msg.info.height, msg.info.width))
             self.grid = GridMap(
                 occupancy, msg.info.resolution, msg.info.origin.position.x, msg.info.origin.position.y,
                 int(self.get_parameter("occupied_threshold").value),
                 bool(self.get_parameter("treat_unknown_as_obstacle").value),
                 float(self.get_parameter("inflate_radius").value),
+                quaternion_to_yaw(msg.info.origin.orientation),
             )
             self._map = msg
             self.get_logger().info(
@@ -173,7 +196,12 @@ class PlannerNodeBase(rclpy.node.Node):
             self.path_pub.publish(empty_path)
             self.get_logger().warning(f"{self.method_name} failed: {result.reason}")
             return
-        path = result_to_path(result, str(self.get_parameter("global_frame").value), self.get_clock().now().to_msg())
+        path = result_to_path(
+            result,
+            str(self.get_parameter("global_frame").value),
+            self.get_clock().now().to_msg(),
+            float(self.get_parameter("path_resolution").value),
+        )
         self.path_pub.publish(path)
         self.get_logger().info(
             f"{self.method_name}: {result.planning_time_ms:.2f} ms, {result.expanded_nodes} expanded, "

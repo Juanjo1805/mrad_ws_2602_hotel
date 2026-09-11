@@ -9,6 +9,8 @@ ekf_node:
       map_frame: map
       odom_frame: odom
       base_frame: base_link
+      # The EKF is the sole publisher of odom -> base_link.  AMCL/SLAM owns
+      # map -> odom; the diff-drive controller publishes wheel odometry only.
       publish_tf: true
 
     topics:
@@ -33,4 +35,3 @@ ekf_node:
     # Measurement noise (R) — simple diagonal terms
     R_wheel_diag: [0.20, 0.20]   # [v, yaw_rate]
     R_imu_yaw_rate: 0.05         # omega_z
-

@@ -23,6 +23,17 @@ def test_world_grid_round_trip_uses_cell_centres():
     assert grid.world_to_grid(-0.01, 0.0) is None
 
 
+def test_world_grid_conversion_respects_rotated_map_origin():
+    grid = GridMap(
+        np.zeros((10, 10), dtype=np.int16), 1.0, 10.0, 20.0,
+        inflate_radius=0.0, origin_yaw=math.pi / 2.0,
+    )
+    assert grid.world_to_grid(9.5, 20.5) == (0, 0)
+    x, y = grid.grid_to_world(0, 0)
+    assert abs(x - 9.5) < 1e-12
+    assert abs(y - 20.5) < 1e-12
+
+
 def test_theta_discretization_wraps_equivalent_angles():
     planner = HybridAStarPlanner(free_grid(), theta_resolution=math.pi / 6.0)
     assert planner.theta_to_bin(-math.pi) == planner.theta_to_bin(math.pi)
@@ -59,3 +70,10 @@ def test_dijkstra_refuses_blocked_goal_instead_of_returning_a_fake_path():
     result = DijkstraPlanner(grid).plan(Pose2D(0.15, 0.15), Pose2D(0.55, 0.55))
     assert not result.success
     assert result.reason == "goal_occupied"
+
+
+def test_dijkstra_keeps_requested_terminal_yaw():
+    result = DijkstraPlanner(free_grid()).plan(
+        Pose2D(0.15, 0.15, 0.0), Pose2D(0.65, 0.15, math.pi / 2.0))
+    assert result.success
+    assert abs(wrap_to_pi(result.poses[-1].yaw - math.pi / 2.0)) < 1e-12

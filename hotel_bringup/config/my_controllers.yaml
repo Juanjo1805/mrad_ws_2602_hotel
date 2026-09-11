@@ -16,8 +16,11 @@ diffdrive_controller:
 
     base_frame_id: base_link
     
+    # Localization owns odom -> base_link.  The EKF fuses this controller's
+    # wheel odometry with the IMU and is the sole publisher of that transform.
     publish_tf: false
     enable_odom_tf: false
+    cmd_vel_timeout: 0.5
 
     left_wheel_names: ['left_wheel_joint']
     right_wheel_names: ['right_wheel_joint']

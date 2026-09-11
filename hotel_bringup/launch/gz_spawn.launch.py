@@ -55,6 +55,7 @@ def generate_launch_description():
     description_pkg_name = "hotel_description"
 
     use_sim_time = LaunchConfiguration("use_sim_time")
+    start_ekf = LaunchConfiguration("start_ekf")
     x_pose = LaunchConfiguration("x_pose")
     y_pose = LaunchConfiguration("y_pose")
     z_pose = LaunchConfiguration("z_pose")
@@ -159,6 +160,19 @@ def generate_launch_description():
         remappings=[('/cmd_vel_out','/diffdrive_controller/cmd_vel')]
     )
 
+    # The controller intentionally does not broadcast odom -> base_link.
+    # Start the EKF in the same simulation bringup so the required fused TF is
+    # present without relying on a manually started, easily omitted terminal.
+    ekf_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("hotel_ekf"), "launch", "ekf.launch.py"
+            )
+        ),
+        launch_arguments={"use_sim_time": use_sim_time}.items(),
+        condition=IfCondition(start_ekf),
+    )
+
     lidar_data_node = Node(
         package=bringup_pkg_name,
         executable='lidar_data',
@@ -172,21 +186,26 @@ def generate_launch_description():
             description="Use simulation (Gazebo) clock if true",
         ),
         DeclareLaunchArgument(
+            "start_ekf",
+            default_value="true",
+            description="Start the EKF, the sole publisher of odom -> base_link",
+        ),
+        DeclareLaunchArgument(
             "gz_mode",
             default_value="true",
             description="Run Gazebo with GUI if true, headless if false",
         ),
         DeclareLaunchArgument(
             "world",
-            default_value="walls_world2.sdf",
+            default_value="exam1_world_obs.sdf",
             description="World SDF filename from hotel_gazebo/worlds or a full path",
         ),
-        DeclareLaunchArgument("x_pose", default_value="0.0"),
+        DeclareLaunchArgument("x_pose", default_value="-15.4"),
         DeclareLaunchArgument("y_pose", default_value="0.0"),
         DeclareLaunchArgument("z_pose", default_value="0.5"),
         DeclareLaunchArgument("roll", default_value="0.0"),
         DeclareLaunchArgument("pitch", default_value="0.0"),
-        DeclareLaunchArgument("yaw", default_value="0.0"),
+        DeclareLaunchArgument("yaw", default_value="1.57"),
         gz_launch,
         rsp,
         TimerAction(period=3.0, actions=[spawn]),
@@ -198,4 +217,5 @@ def generate_launch_description():
         twist_mux_node,
         lidar_data_node,
         aeb_node,
+        ekf_launch,
     ])

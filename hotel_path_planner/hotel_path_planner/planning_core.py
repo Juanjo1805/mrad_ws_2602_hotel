@@ -68,6 +68,7 @@ class GridMap:
         occupied_threshold: int = 65,
         treat_unknown_as_obstacle: bool = True,
         inflate_radius: float = 0.25,
+        origin_yaw: float = 0.0,
     ) -> None:
         if occupancy.ndim != 2:
             raise ValueError("occupancy must be a (height, width) array")
@@ -77,6 +78,13 @@ class GridMap:
         self.resolution = float(resolution)
         self.origin_x = float(origin_x)
         self.origin_y = float(origin_y)
+        # OccupancyGrid.origin is a full pose.  Most map-server maps use a
+        # zero yaw, but silently ignoring a non-zero yaw swaps/rotates the
+        # world-grid conversion and produces a route that only looks right in
+        # RViz by accident.
+        self.origin_yaw = float(origin_yaw)
+        self._origin_cos = math.cos(self.origin_yaw)
+        self._origin_sin = math.sin(self.origin_yaw)
         self.height, self.width = self.occupancy.shape
         self.occupied_threshold = int(occupied_threshold)
         self.treat_unknown_as_obstacle = bool(treat_unknown_as_obstacle)
@@ -118,17 +126,28 @@ class GridMap:
                         heapq.heappush(queue, (candidate, nx, ny))
         return dist
 
+    def world_to_local(self, x: float, y: float) -> Tuple[float, float]:
+        """Express a world point in the unrotated grid-origin coordinates."""
+        dx, dy = x - self.origin_x, y - self.origin_y
+        return (
+            self._origin_cos * dx + self._origin_sin * dy,
+            -self._origin_sin * dx + self._origin_cos * dy,
+        )
+
     def world_to_grid(self, x: float, y: float) -> Optional[Tuple[int, int]]:
-        ix = int(math.floor((x - self.origin_x) / self.resolution))
-        iy = int(math.floor((y - self.origin_y) / self.resolution))
+        local_x, local_y = self.world_to_local(x, y)
+        ix = int(math.floor(local_x / self.resolution))
+        iy = int(math.floor(local_y / self.resolution))
         if self.in_bounds(ix, iy):
             return ix, iy
         return None
 
     def grid_to_world(self, ix: int, iy: int) -> Tuple[float, float]:
+        local_x = (ix + 0.5) * self.resolution
+        local_y = (iy + 0.5) * self.resolution
         return (
-            self.origin_x + (ix + 0.5) * self.resolution,
-            self.origin_y + (iy + 0.5) * self.resolution,
+            self.origin_x + self._origin_cos * local_x - self._origin_sin * local_y,
+            self.origin_y + self._origin_sin * local_x + self._origin_cos * local_y,
         )
 
     def in_bounds(self, ix: int, iy: int) -> bool:
@@ -180,6 +199,39 @@ def path_metrics(grid: GridMap, poses: Sequence[Pose2D]) -> Tuple[float, Optiona
             if abs(wrap_to_pi(pose.yaw - poses[i - 1].yaw)) > math.radians(35.0):
                 sharp += 1
     return length, (min(clearances) if clearances else None), sharp
+
+
+def densify_path(
+    poses: Sequence[Pose2D],
+    resolution: float,
+    angular_resolution: float = math.radians(10.0),
+) -> List[Pose2D]:
+    """Interpolate a path without losing terminal heading information.
+
+    Grid Dijkstra already produces samples at the map resolution, while a
+    Hybrid A* primitive can be much longer.  A common output resolution keeps
+    a tracker from treating sparse planner states as a polyline with large,
+    discontinuous steering requests.  Pure rotations are sampled by yaw too.
+    """
+    if not poses:
+        return []
+    step = max(float(resolution), 1e-4)
+    yaw_step = max(float(angular_resolution), 1e-4)
+    dense: List[Pose2D] = [poses[0]]
+    for start, finish in zip(poses, poses[1:]):
+        distance = math.hypot(finish.x - start.x, finish.y - start.y)
+        yaw_delta = wrap_to_pi(finish.yaw - start.yaw)
+        count = max(1, int(math.ceil(distance / step)), int(math.ceil(abs(yaw_delta) / yaw_step)))
+        for index in range(1, count + 1):
+            ratio = index / count
+            dense.append(Pose2D(
+                start.x + (finish.x - start.x) * ratio,
+                start.y + (finish.y - start.y) * ratio,
+                wrap_to_pi(start.yaw + yaw_delta * ratio),
+            ))
+    # Avoid an accumulated numerical yaw error at the final orientation.
+    dense[-1] = Pose2D(poses[-1].x, poses[-1].y, poses[-1].yaw)
+    return dense
 
 
 class DijkstraPlanner:
@@ -259,6 +311,9 @@ class DijkstraPlanner:
             elif len(cells) == 1:
                 previous_yaw = goal.yaw
             poses.append(Pose2D(x, y, previous_yaw))
+        # Dijkstra has no heading state, but a PoseStamped goal does.  Keep
+        # its requested terminal orientation instead of the last grid edge.
+        poses[-1] = Pose2D(poses[-1].x, poses[-1].y, goal.yaw)
         elapsed = (time.perf_counter() - started) * 1000.0
         length, clearance, sharp = path_metrics(self.grid, poses)
         return PlannerResult(True, poses, elapsed, expanded, "", length, clearance, sharp)
@@ -333,8 +388,9 @@ class HybridAStarPlanner:
         return wrap_to_pi(theta_bin * self.theta_resolution - math.pi)
 
     def state_key(self, state: HybridState) -> Tuple[int, int, int, int]:
-        ix = int(math.floor((state.x - self.grid.origin_x) / self.xy_resolution))
-        iy = int(math.floor((state.y - self.grid.origin_y) / self.xy_resolution))
+        local_x, local_y = self.grid.world_to_local(state.x, state.y)
+        ix = int(math.floor(local_x / self.xy_resolution))
+        iy = int(math.floor(local_y / self.xy_resolution))
         return ix, iy, self.theta_to_bin(state.yaw), state.direction
 
     def _translation_primitive(self, state: HybridState, curvature: float, direction: int) -> Optional[HybridState]:
