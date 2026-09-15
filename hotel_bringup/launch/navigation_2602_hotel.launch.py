@@ -40,6 +40,8 @@ def generate_launch_description():
     tracker_trace_csv = LaunchConfiguration('tracker_trace_csv')
     tracker_results_csv = LaunchConfiguration('tracker_results_csv')
     adaptive_params_file = LaunchConfiguration('adaptive_params_file')
+    reactive_avoidance = LaunchConfiguration('reactive_avoidance')
+    reactive_params_file = LaunchConfiguration('reactive_params_file')
     linear_velocity = LaunchConfiguration('linear_velocity')
     max_linear_velocity = LaunchConfiguration('max_linear_velocity')
     max_angular_velocity = LaunchConfiguration('max_angular_velocity')
@@ -92,6 +94,10 @@ def generate_launch_description():
         'config',
         'adaptive_pure_pursuit.yaml',
     )
+    default_reactive_params = os.path.join(
+        get_package_share_directory('hotel_ttc_follow_the_gap'),
+        'config', 'reactive_avoidance.yaml',
+    )
     return LaunchDescription([
         DeclareLaunchArgument('planner', default_value='dijkstra',
                               description='dijkstra | hybrid_astar'),
@@ -109,6 +115,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'adaptive_params_file', default_value=default_adaptive_params,
             description='ROS parameter YAML used only by tracker:=adaptive_pure_pursuit'),
+        DeclareLaunchArgument('reactive_avoidance', default_value='false',
+                              description='Enable path-aware FTG supervisor; default preserves nominal tracking'),
+        DeclareLaunchArgument('reactive_params_file', default_value=default_reactive_params,
+                              description='ROS parameter YAML used only with reactive_avoidance:=true'),
         # Exposing the pre-existing Pure Pursuit values as launch arguments
         # lets the experiment runner record and replay a baseline verbatim.
         DeclareLaunchArgument('linear_velocity', default_value='0.45'),
@@ -169,6 +179,14 @@ def generate_launch_description():
             output='screen',
             condition=tracker_condition(tracker, 'adaptive_pure_pursuit'),
             parameters=[adaptive_params_file, adaptive_parameters],
+        ),
+        Node(
+            package='hotel_ttc_follow_the_gap',
+            executable='reactive_avoidance_supervisor',
+            name='reactive_avoidance_supervisor',
+            output='screen',
+            condition=IfCondition(reactive_avoidance),
+            parameters=[reactive_params_file, {'use_sim_time': use_sim_time}],
         ),
         Node(
             package='path_tracker_2602_hotel',

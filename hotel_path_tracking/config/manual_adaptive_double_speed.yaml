@@ -1,0 +1,75 @@
+# Passive-recorder profile for the manually validated Adaptive Pure Pursuit run.
+# This file does not launch or configure any part of the external ROS stack.
+results_root: optimization_results
+controller: adaptive_pure_pursuit
+controller_node: /adaptive_pure_pursuit
+
+physical_limits:
+  wheel_radius_m: 0.05
+  wheel_separation_m: 0.44
+  wheel_max_angular_velocity_rad_s: 20.0
+  derived_max_linear_velocity_m_s: 1.00
+
+mission:
+  planner: hybrid_astar
+  tracker: adaptive_pure_pursuit
+  mission_mode: fixed_waypoints
+  laps: 2
+  waypoints_file: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_planner/config/fixed_waypoints.yaml
+  adaptive_params_file: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_tracking/config/adaptive_pure_pursuit.yaml
+  use_sim_time: true
+  scenario: manual_adaptive_double_speed
+  environment: gazebo
+
+runtime:
+  gazebo_world_name: empty_world
+  gazebo_model_name: diffbot
+  readiness:
+    localized_timeout_s: 75.0
+    stable_window_s: 2.0
+    sample_frequency_hz: 10.0
+    minimum_odom_samples: 15
+    minimum_scan_samples: 5
+    minimum_tf_samples: 10
+    minimum_amcl_samples: 1
+    minimum_odom_rate_hz: 5.0
+    minimum_scan_rate_hz: 1.0
+    maximum_amcl_x_covariance_m2: 2.0
+    maximum_amcl_y_covariance_m2: 2.0
+    maximum_amcl_yaw_covariance_rad2: 1.0
+
+monitor:
+  expected_laps: 2
+  sample_frequency: 25.0
+  odom_topic: /ekf/odometry
+  maximum_duration_s: 1100.0
+  critical_lateral_error_m: 1.00
+  critical_error_duration_s: 1.5
+  stuck_window_s: 45.0
+  stuck_min_progress_m: 0.12
+  stuck_min_distance_m: 0.12
+  stuck_min_closest_index_delta: 3
+  stuck_max_actual_linear_speed_m_s: 0.025
+  stuck_recovery_angular_speed_rad_s: 0.08
+  stuck_command_speed_threshold_m_s: 0.04
+  finish_radius_m: 0.60
+  lap_progress_fraction: 0.95
+  curvature_preview_distance: 1.20
+  max_angular_velocity: 4.00
+  wheel_radius_m: 0.05
+  wheel_separation_m: 0.44
+  wheel_max_angular_velocity: 20.0
+
+provenance_files:
+  world_sdf: /home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/worlds/exam1_world_obs.sdf
+  map_yaml: /home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map_nuevo.yaml
+  map_image: /home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map_nuevo.pgm
+  waypoints: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_planner/config/fixed_waypoints.yaml
+  navigation_launch: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/launch/navigation_2602_hotel.launch.py
+  adaptive_pure_pursuit_parameters: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_tracking/config/adaptive_pure_pursuit.yaml
+  adaptive_pure_pursuit_node: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_tracking/hotel_path_tracking/adaptive_pure_pursuit_node.py
+  diffdrive_ros2_control: /home/lenovo/mrad_ws_2602_hotel/src/hotel_description/diffdrive_urdf/ros2_control.xacro
+  amcl_parameters: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/config/nav2_params.yaml
+  ekf_parameters: /home/lenovo/mrad_ws_2602_hotel/src/hotel_ekf/config/ekf_params.yaml
+  aeb_node: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/hotel_bringup/aeb_node.py
+  twist_mux: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/config/twist_mux.yaml

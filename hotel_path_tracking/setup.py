@@ -13,6 +13,7 @@ setup(
         ('share/' + package_name + '/config', [
             'config/optimization_baseline.yaml',
             'config/adaptive_pure_pursuit.yaml',
+            'config/manual_adaptive_double_speed.yaml',
         ]),
     ],
     install_requires=['setuptools'],
@@ -36,6 +37,7 @@ setup(
             'run_optimization=hotel_path_tracking.run_optimization:main',
             'record_manual_baseline=hotel_path_tracking.record_manual_baseline:main',
             'compare_baselines=hotel_path_tracking.compare_baselines:main',
+            'compare_run001_vs_run002=hotel_path_tracking.compare_run001_vs_run002:main',
             'analyze_baseline_reproducibility=hotel_path_tracking.analyze_baseline_reproducibility:main',
             'system_readiness=hotel_path_tracking.system_readiness:main',
             'analyze_optimization=hotel_path_tracking.analyze_optimization:main',

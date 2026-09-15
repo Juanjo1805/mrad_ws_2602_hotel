@@ -1,241 +1,293 @@
-# Team Hotel — Path Planning and Path Tracking (2602)
+# Team Hotel — Path Planning, Tracking y evasión reactiva
 
-Implementación ROS 2 Jazzy para el robot diferencial Hotel. El proyecto conserva los componentes de simulación, localización, seguridad y control existentes, y añade la comparación A/B del assignment.
+Entrega ROS 2 Jazzy + Gazebo Harmonic para robot diferencial: localización, planificación global, seguimiento, seguridad y evasión local de obstáculos no mapeados.
 
-| Etapa | Baseline | Implementación Team Hotel |
-|---|---|---|
-| Path planning | `dijkstra_pp_2602_hotel` | `hybrid_astar_pp_2602_hotel` |
-| Path tracking | `pure_pursuit_pt_2602_hotel` | `lqr_pt_2602_hotel` |
-
-Los informes y datos medidos están en [`results/ASSIGNMENT_RESULTS_HOTEL.md`](results/ASSIGNMENT_RESULTS_HOTEL.md) y [`results/GAZEBO_CLOSED_LOOP_RESULTS_HOTEL.md`](results/GAZEBO_CLOSED_LOOP_RESULTS_HOTEL.md).
-
-## Arquitectura
+## Arquitectura general
 
 ```text
-/map + TF(map → base_link) + /goal_pose
-                 │
-                 ▼
-  Dijkstra o Hybrid A* ── /planned_path ──► Pure Pursuit o LQR
-                                                   │
-                                              /cmd_vel_nav
-                                                   │
-  twist_mux → /cmd_vel_mux → AEB → /diffdrive_controller/cmd_vel
+/map -> AMCL -> map -> odom
+wheel odometry + IMU -> hotel_ekf -> odom -> base_link
+
+waypoints -> Dijkstra | Hybrid A* -> /planned_path
+                                      -> Pure Pursuit | LQR | Adaptive Pure Pursuit
+                                                                 -> /cmd_vel_nav --+
+Follow-The-Gap reactivo ----------------------------------------> /cmd_vel_gap --+-> twist_mux
+                                                                                   -> /cmd_vel_mux -> AEB
+                                                                                   -> /diffdrive_controller/cmd_vel -> robot
 ```
 
-El robot usa `diff_drive_controller/DiffDriveController`, con radio de rueda de 0.05 m, separación de 0.44 m y límite de rueda de ±10 rad/s. El límite lineal físico derivado es 0.50 m/s; el launch de navegación ajusta ambos trackers a 0.45 m/s nominal y 2.0 rad/s máximo.
+Hybrid A* produce la ruta global; Adaptive Pure Pursuit la sigue normalmente. El FTG reactivo no replantea: solo toma control cuando un obstáculo bloquea el corredor futuro, luego reengancha por delante al path original. AEB está después del mux y protege ambos mandos.
 
-## Estructura y paquetes ROS 2
+## Paquetes ROS 2
 
-```text
-src/
-├── hotel_bringup/          lanzadores, twist_mux, AEB e interfaces de operación
-├── hotel_description/      URDF/Xacro y configuración de robots
-├── hotel_gazebo/           mundos, mapas y puente Gazebo–ROS
-├── hotel_ekf/              EKF para la odometría
-├── hotel_path_planner/     paquete ROS path_planner_2602_hotel
-├── hotel_path_tracking/    paquete ROS path_tracker_2602_hotel
-├── hotel_line_extractor/   extracción de líneas y lane keeping
-├── hotel_wall_following/   seguimiento de pared
-├── hotel_ttc_follow_the_gap/  TTC / Follow-the-Gap
-├── hotel_control/          paquete de control
-├── hotel_esc/              scripts y bag de identificación de sistema
-├── vicon_v2/vicon/         interfaz Vicon
-├── experiments/            benchmarks y análisis reproducibles
-└── results/                CSV, informes y gráficas generadas
-```
-
-| Paquete ROS 2 | Rol | Ejecutables o launch relevantes |
+| Paquete | Rol | Ejecutables/launch relevantes |
 |---|---|---|
-| `path_planner_2602_hotel` | Planificación global sobre `OccupancyGrid`. | `dijkstra_pp_2602_hotel`, `hybrid_astar_pp_2602_hotel` |
-| `path_tracker_2602_hotel` | Seguimiento de `nav_msgs/Path` para el diferencial. | `pure_pursuit_pt_2602_hotel`, `lqr_pt_2602_hotel` |
-| `hotel_bringup` | Simulación, localización, multiplexado y selector. | `navigation_2602_hotel.launch.py`, `gz_spawn.launch.py` |
-| `hotel_description`, `hotel_gazebo`, `hotel_ekf` | Descripción, simulación/mapas y estimación TF. | `ekf.launch.py`, localización AMCL/SLAM |
-| `hotel_line_extractor`, `hotel_wall_following`, `hotel_ttc_follow_the_gap`, `hotel_control`, `vicon` | Capacidades adicionales del proyecto. | Launches de LKA, wall following y gap following. |
-
-Los `setup.py` de planner y tracker también registran ejecutables de desarrollo (BIT*, ARA*, DWB y Stanley); no forman parte del selector del assignment.
-
-## Interfaces ROS y TF
-
-| Topic | Type | Dirección | Descripción |
-|---|---|---|---|
-| `/map` | `nav_msgs/OccupancyGrid` | localización → planner | Mapa estático usado por ambos planners. |
-| `/goal_pose` | `geometry_msgs/PoseStamped` | RViz/usuario → planner | Goal en `map` o transformable a ese frame. |
-| `/planned_path` | `nav_msgs/Path` | planner → tracker | Ruta calculada en el frame global. |
-| `/cmd_vel_nav` | `geometry_msgs/TwistStamped` | tracker → `twist_mux` | Comando autónomo. |
-| `/cmd_vel_mux` | `geometry_msgs/TwistStamped` | `twist_mux` → AEB | Salida multiplexada. |
-| `/diffdrive_controller/cmd_vel` | `geometry_msgs/TwistStamped` | AEB → robot | Referencia del controlador diferencial. |
-| `/diffdrive_controller/odom` | `nav_msgs/Odometry` | robot → EKF | Odometría de ruedas de la simulación. |
-| `/scan` | `sensor_msgs/LaserScan` | Gazebo → ROS | LiDAR puenteado por `hotel_gazebo`. |
-| `/imu` | `sensor_msgs/Imu` | Gazebo → ROS | IMU puenteada por `hotel_gazebo`. |
-
-La cadena TF requerida es `map → odom → base_link`: `map → odom` viene de AMCL o `slam_toolbox`, y `odom → base_link` de odometría/EKF. `DiffDriveController` tiene `publish_tf: false`, por lo que debe iniciarse localización y `hotel_ekf` antes de enviar goals. Los planners recuperan el start con TF `map → base_link`; los trackers transforman el path al frame del robot.
-
-```bash
-ros2 run tf2_ros tf2_echo map base_link
-```
+| `path_planner_2602_hotel` (`hotel_path_planner`) | Planificación y misión por waypoints. | `dijkstra_pp_2602_hotel`, `hybrid_astar_pp_2602_hotel`, `fixed_waypoint_planner`, `editable_waypoint_manager` |
+| `path_tracker_2602_hotel` (`hotel_path_tracking`) | Seguimiento diferencial. | `pure_pursuit_pt_2602_hotel`, `lqr_pt_2602_hotel`, `adaptive_pure_pursuit`, `publish_initial_pose` |
+| `hotel_bringup` | Gazebo, AMCL, controladores, mux y AEB. | `gz_spawn.launch.py`, `amcl_localization.launch.py`, `navigation_2602_hotel.launch.py` |
+| `hotel_description` | URDF/Xacro y límites físicos. | `diffdrive_urdf/robot.urdf.xacro` |
+| `hotel_ttc_follow_the_gap` | FTG y supervisor reactivo. | `ttc_gap_finder`, `ttc_control`, `reactive_avoidance_supervisor` |
+| `hotel_ekf` | Fusión local y TF. | `ekf.launch.py`, `ekf_node` |
 
 ## Path Planning
 
 ### Dijkstra
 
-`dijkstra_pp_2602_hotel` es el baseline. Recibe `/map` y `/goal_pose`, consulta el start por TF y publica `nav_msgs/Path` en `/planned_path`. Busca sobre la grilla; por defecto usa vecindad de 8 conexiones y evita cortar esquinas. Ante mapa, TF o goal no válidos publica un path vacío, evitando que un tracker continúe una ruta obsoleta.
+Busca el coste acumulado mínimo sobre el `OccupancyGrid`, con vecindad de 8 conexiones y prevención de corner cutting. Recibe mapa, goal y start por TF; publica `/planned_path` como `nav_msgs/msg/Path` en `map`.
 
 ### Hybrid A*
 
-`hybrid_astar_pp_2602_hotel` es el método asignado a Team Hotel. Su estado incluye `(x, y, theta, direction)`, por lo que puede respetar orientación final. Está adaptado a un diferencial: expande primitivas del unicycle (arcos con curvatura negativa, nula y positiva), reversa opcional y giro in-place. Cada arco se muestrea para validar colisiones contra el mapa inflado. El giro in-place tiene penalización explícita; no es una aproximación Ackermann. Publica `nav_msgs/Path` en `/planned_path`.
+`hybrid_astar_pp_2602_hotel` planifica posición, orientación y dirección mediante primitivas de unicycle. Valida arcos contra el mapa inflado, permite reversa/giro in-place según parámetros y respeta orientación final. Es el planner principal de la demostración porque genera rutas coherentes con un diferencial.
+
+La misión cerrada usa [`fixed_waypoints.yaml`](hotel_path_planner/config/fixed_waypoints.yaml), frame `map`, con **46 waypoints**. `fixed_waypoint_planner` concatena tramos y publica un único `/planned_path` denso.
 
 ## Path Tracking
 
-### Pure Pursuit
+### Pure Pursuit y LQR
 
-`pure_pursuit_pt_2602_hotel` es el baseline. Elige un punto de lookahead sobre `/planned_path`, calcula curvatura y publica `linear.x` y `angular.z` como `geometry_msgs/TwistStamped` en `/cmd_vel_nav`. Reduce velocidad cerca del goal y limita curvatura, velocidad y giro.
+Pure Pursuit selecciona closest point y lookahead, calcula curvatura y publica `v, omega`. Mantiene progreso monótono, rechaza targets detrás del robot, valida frames y evita terminar prematuramente en una ruta cerrada. LQR usa el error unicycle/diferencial `e=[e_x,e_y,e_theta]`, realimentación LQR y saturaciones físicas.
 
-### LQR
+### Adaptive Pure Pursuit
 
-`lqr_pt_2602_hotel` usa el error `e=[e_x,e_y,e_theta]` en el frame de referencia. Cada ciclo discretiza el modelo diferencial alrededor de la referencia, resuelve la ganancia LQR y aplica `delta_u=-K e`. Las matrices `Q` y `R` se ajustan con `q_*` y `r_*`; la salida saturada es `linear.x` y `angular.z` en `/cmd_vel_nav`. LQR y Pure Pursuit publican cero ante path vacío, TF no disponible o goal alcanzado.
+Es el tracker nominal. Combina lookahead dinámico, velocidad dependiente de geometría y preview de curvatura:
+
+```text
+Ld = clamp((lookahead_base + lookahead_speed_gain*|v_cmd[k-1]|) /
+           (1 + lookahead_curvature_gain*|kappa_preview|), Ld_min, Ld_max)
+```
+
+El target de velocidad toma el mínimo de techos por curvatura actual/futura, capacidad angular, error lateral, heading y rueda, y se rate-limita.
+
+| Parámetro actual | Valor |
+|---|---:|
+| `min_linear_velocity`, `nominal_linear_velocity`, `max_linear_velocity` | 0.25, 0.90, 1.00 m/s |
+| `max_angular_velocity` | 4.00 rad/s |
+| `lookahead_min`, `lookahead_base`, `lookahead_max` | 0.30, 0.60, 1.20 m |
+| `lookahead_speed_gain`, `lookahead_curvature_gain` | 0.60, 0.60 |
+| `curvature_preview_distance` | 1.20 m |
+| `acceleration_limit`, `deceleration_limit` | 0.70, 1.40 m/s² |
+| `wheel_max_angular_velocity` | 20 rad/s |
+
+Diagnósticos publicados por el tracker:
+
+```text
+/path_tracking/current_speed              /path_tracking/target_speed
+/path_tracking/speed_limit_curvature      /path_tracking/speed_limit_preview
+/path_tracking/speed_limit_omega          /path_tracking/speed_limit_lateral_error
+/path_tracking/lookahead_distance         /path_tracking/curvature
+/path_tracking/future_curvature           /path_tracking/lateral_error
+/path_tracking/heading_error              /path_tracking/path_progress
+/path_tracking/closest_index
+```
+
+## Límites, localización y TF
+
+El robot tiene radio de rueda **0.05 m**, separación **0.44 m** y límites de rueda **±20 rad/s**. El límite lineal teórico es `20*0.05=1.00 m/s`; el angular cinemático aproximado es `1/0.22=4.55 rad/s`.
+
+La TF es `map -> odom -> base_link`: AMCL publica `map -> odom`; `hotel_ekf` publica el único `odom -> base_link` (`frames.publish_tf: true`). El EKF estima `[x,y,yaw,v,omega]`, fusiona velocidad/yaw-rate de `/diffdrive_controller/odom` y `angular_velocity.z` de `/imu`. `diffdrive_controller` tiene `publish_tf: false` y `enable_odom_tf: false`.
+
+### AMCL y mapa
+
+AMCL se carga con [`map_nuevo.yaml`](hotel_gazebo/maps/map_nuevo.yaml), mediante `amcl_localization.launch.py` y `map:=...`. La pose inicial se publica en `/initialpose` (`geometry_msgs/msg/PoseWithCovarianceStamped`).
+
+### Spawn inicial del robot
+
+`gz_spawn.launch.py` usa por defecto `exam1_world_obs.sdf` y spawn físico:
+
+```text
+x=-15.4 m, y=0.0 m, z=0.5 m, roll=0, pitch=0, yaw=1.57 rad
+```
+
+El spawn físico de Gazebo y la pose global AMCL no son equivalentes; deben ser coherentes para no introducir offset, mal tracking o activaciones AEB.
+
+En la secuencia manual validada, después de que AMCL esté activo se publica la pose global `map` `(0, 0, 0 rad)` con el ejecutable del workspace:
+
+```bash
+ros2 run path_tracker_2602_hotel publish_initial_pose --ros-args \
+  -p use_sim_time:=true -p x:=0.0 -p y:=0.0 -p yaw:=0.0 -p frame_id:=map
+```
+
+No sustituya los valores de spawn de Gazebo por esta pose: el origen físico del mundo y el origen del mapa son referencias distintas.
+
+## Evasión reactiva de obstáculos no mapeados
+
+Implementación: [`reactive_core.py`](hotel_ttc_follow_the_gap/hotel_ttc_follow_the_gap/reactive_core.py), [`reactive_avoidance_supervisor.py`](hotel_ttc_follow_the_gap/hotel_ttc_follow_the_gap/reactive_avoidance_supervisor.py) y [`reactive_avoidance.yaml`](hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml).
+
+```text
+TRACKING -> AVOIDING -> REJOINING -> TRACKING
+```
+
+- **TRACKING:** Adaptive PP conserva hasta 1.00 m/s.
+- **Detección:** usa LiDAR y corredor del tramo futuro del path, no el mínimo global del scan. Corredor = semiancho del chasis 0.20 m + margen 0.15 m = **0.35 m**. Exige 3 retornos, distancia ≤2.20 m y persistencia 0.30 s.
+- **Preview:** `max(base + gain*v, v²/(2*deceleration) + latency*v + front_extent + safety_margin)`, entre 1.00 y 2.50 m; a 1.0 m/s resulta 1.65 m.
+- **AVOIDING:** FTG publica `/cmd_vel_gap` (`TwistStamped`) hasta 0.68 m/s y 2.00 rad/s. El mux da prioridad 150 frente a 100 de `/cmd_vel_nav`.
+- **REJOINING:** tras corredor libre 0.60 s y mínimo 0.80 s evitando, Adaptive PP recupera mando a máximo 0.68 m/s. Rejoin queda 0.70 m adelante, sin retroceder índice. Vuelve a TRACKING tras 0.80 s con `|cte|<0.15 m` y `|heading|<0.22 rad`.
+
+FTG usa FOV 120°, preprocessing, bubble, gaps con ancho físico mínimo 0.55 m y sesgo opcional al path. La anchura es `2*range_representativo*sin(anchura_angular/2)`.
+
+**Corrección de ingeniería:** la versión inicial expandía bubble alrededor de cada retorno <2.20 m; paredes/retornos superpuestos borraron 241/241 beams, dejando 0 candidates, 0 gaps válidos, ancho y target en cero. Ahora la bubble se expande únicamente alrededor del retorno bloqueante más cercano. El test de caja frontal obtiene `ftg_valid_gap=true`, ancho positivo y ángulo no nulo.
+
+## Arbitraje y seguridad
+
+```text
+/cmd_vel_nav + /cmd_vel_gap -> twist_mux -> /cmd_vel_mux -> AEB -> /diffdrive_controller/cmd_vel
+```
+
+FTG nunca bypassa AEB. No se redujeron TTC, márgenes, thresholds ni sector de seguridad para habilitar la evasión.
+
+## Topics importantes
+
+| Topic | Tipo | Publisher | Propósito |
+|---|---|---|---|
+| `/scan` | `sensor_msgs/msg/LaserScan` | bridge Gazebo | LiDAR |
+| `/imu` | `sensor_msgs/msg/Imu` | bridge Gazebo | IMU |
+| `/map` | `nav_msgs/msg/OccupancyGrid` | map server | Mapa global |
+| `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | AMCL | Estimación global |
+| `/initialpose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | usuario / `publish_initial_pose` | Inicialización de AMCL |
+| `/tf`, `/tf_static` | `tf2_msgs/msg/TFMessage` | AMCL, EKF, robot state publisher | Cadena de transformaciones |
+| `/planned_path` | `nav_msgs/msg/Path` | planner | Ruta global |
+| `/cmd_vel_nav` | `geometry_msgs/msg/TwistStamped` | tracker | Mando nominal |
+| `/cmd_vel_gap` | `geometry_msgs/msg/TwistStamped` | supervisor reactivo | Mando FTG durante AVOIDING |
+| `/cmd_vel_mux` | `geometry_msgs/msg/TwistStamped` | `twist_mux` | Mando arbitrado |
+| `/diffdrive_controller/cmd_vel` | `geometry_msgs/msg/TwistStamped` | AEB | Mando seguro al robot |
+| `/ekf/odometry`, `/diffdrive_controller/odom` | `nav_msgs/msg/Odometry` | `hotel_ekf`/DiffDriveController | Estado fusionado y odometría de rueda |
+| `/reactive_avoidance/state` | `std_msgs/msg/String` | supervisor | Estado reactivo |
+| `/reactive_avoidance/active`, `/blocking_obstacle`, `/unmapped_obstacle`, `/path_clear`, `/ftg_valid_gap` | `std_msgs/msg/Bool` | supervisor | Decisiones |
+| `/reactive_avoidance/obstacle_distance`, `/preview_distance`, `/corridor_width`, `/rejoin_distance`, `/rejoin_heading_error`, `/ftg_target_angle`, `/ftg_gap_width`, `/rejoin_speed_limit` | `std_msgs/msg/Float32` | supervisor | Diagnóstico |
+| `/reactive_avoidance/rejoin_index`, `/ftg_candidate_gap_count`, `/ftg_valid_gap_count` | `std_msgs/msg/Int32` | supervisor | Progreso/pipeline |
+| `/reactive_avoidance/ftg_gap_details` | `std_msgs/msg/String` | supervisor | Candidates y rechazos |
+| `/reactive_avoidance/markers` | `visualization_msgs/msg/MarkerArray` | supervisor | Corredor, hits, target, rejoin, estado |
+
+Los diagnósticos de seguimiento y reactivos anteriores se publican con los tipos estándar indicados en la tabla. Para evitar ambigüedad al grabar o monitorizar, los nombres completos son:
+
+```text
+/path_tracking/current_speed              /path_tracking/target_speed
+/path_tracking/speed_limit_curvature      /path_tracking/speed_limit_preview
+/path_tracking/speed_limit_omega          /path_tracking/speed_limit_lateral_error
+/path_tracking/lookahead_distance         /path_tracking/curvature
+/path_tracking/future_curvature           /path_tracking/lateral_error
+/path_tracking/heading_error              /path_tracking/path_progress
+/path_tracking/closest_index
+
+/reactive_avoidance/state                 /reactive_avoidance/active
+/reactive_avoidance/blocking_obstacle     /reactive_avoidance/unmapped_obstacle
+/reactive_avoidance/obstacle_distance     /reactive_avoidance/path_clear
+/reactive_avoidance/preview_distance      /reactive_avoidance/corridor_width
+/reactive_avoidance/rejoin_index          /reactive_avoidance/rejoin_distance
+/reactive_avoidance/rejoin_heading_error  /reactive_avoidance/rejoin_speed_limit
+/reactive_avoidance/ftg_target_angle      /reactive_avoidance/ftg_gap_width
+/reactive_avoidance/ftg_valid_gap         /reactive_avoidance/ftg_candidate_gap_count
+/reactive_avoidance/ftg_valid_gap_count   /reactive_avoidance/ftg_gap_details
+/reactive_avoidance/markers
+```
 
 ## Compilación
 
-Desde la raíz del workspace:
-
 ```bash
 cd /home/lenovo/mrad_ws_2602_hotel
+source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
-source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 
-Para compilar solo el stack del assignment:
+Para una compilación selectiva del stack documentado:
 
 ```bash
-colcon build --packages-select \
-  path_planner_2602_hotel \
-  path_tracker_2602_hotel \
-  hotel_bringup \
-  --symlink-install
-source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select \
+  path_planner_2602_hotel path_tracker_2602_hotel hotel_bringup hotel_ttc_follow_the_gap
 source install/setup.bash
 ```
 
-Abra una terminal nueva por proceso ROS y repita los dos `source`.
+## Ejecución paso a paso
 
-## Simulación y localización
-
-El launch diferencial inicia Gazebo, `robot_state_publisher`, puente de sensores, controladores, joystick, `twist_mux`, AEB y nodos auxiliares. El mundo por defecto es `walls_world2.sdf`; `gz_mode:=false` activa modo headless.
+Terminal 1:
 
 ```bash
-# Terminal 1: Gazebo, robot y cadena de comando
-ros2 launch hotel_bringup gz_spawn.launch.py gz_mode:=false world:=walls_world2.sdf
+ros2 launch hotel_bringup gz_spawn.launch.py \
+  world:=exam1_world_obs.sdf x_pose:=-15.4 y_pose:=0.0 z_pose:=0.5 yaw:=1.57
+```
 
-# Terminal 2: odom → base_link
-ros2 launch hotel_ekf ekf.launch.py
+Este launch inicia Gazebo, el robot, controladores, puente de sensores, `twist_mux`, AEB y, por defecto, `hotel_ekf` (`start_ekf:=true`). Espere a que controladores, `/scan`, `/ekf/odometry` y TF estén disponibles antes de continuar.
 
-# Terminal 3: mapa y AMCL, map → odom
+Terminal 2:
+
+```bash
 ros2 launch hotel_bringup amcl_localization.launch.py \
-  map:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map2.yaml
+  map:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map_nuevo.yaml
 ```
 
-Como alternativa existe el launch real de SLAM Toolbox:
+Terminal 3 — posición inicial de AMCL (ejecútelo cuando AMCL ya esté activo):
 
 ```bash
-ros2 launch hotel_bringup slam_localization.launch.py
+ros2 run path_tracker_2602_hotel publish_initial_pose --ros-args \
+  -p use_sim_time:=true \
+  -p x:=0.0 \
+  -p y:=0.0 \
+  -p yaw:=0.0 \
+  -p frame_id:=map
 ```
 
-No hay un launch de RViz en este repositorio. Si se inicia manualmente, use frame fijo `map` y compruebe TF. `walls_world2.sdf` y `map2.yaml` son el par de la validación cerrada. `exam1_world_obs.sdf` no se recomienda para medir colisiones: DART informó que no podía construir su colisión de malla.
-
-## Ejecutar navegación y elegir métodos
-
-Con simulación y `map → base_link` disponibles, el comando principal es:
+Terminal 4 — navegación:
 
 ```bash
-ros2 launch hotel_bringup navigation_2602_hotel.launch.py
+ros2 launch hotel_bringup navigation_2602_hotel.launch.py \
+  planner:=hybrid_astar tracker:=adaptive_pure_pursuit reactive_avoidance:=true \
+  mission_mode:=fixed_waypoints laps:=2 use_sim_time:=true \
+  waypoints_file:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_path_planner/config/fixed_waypoints.yaml \
+  adaptive_params_file:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_path_tracking/config/adaptive_pure_pursuit.yaml \
+  reactive_params_file:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
 ```
 
-El launch inicia exactamente un planner y tracker. Argumentos reales: `planner:=dijkstra|hybrid_astar`, `tracker:=pure_pursuit|lqr`, `use_sim_time`, `scenario`, `trial` y `environment`.
+Sin evasión: `reactive_avoidance:=false`. Valores válidos: planners `dijkstra|hybrid_astar`; trackers `pure_pursuit|lqr|adaptive_pure_pursuit`; misión `goal|fixed_waypoints`.
+
+| Componente | Valores admitidos por `navigation_2602_hotel.launch.py` |
+|---|---|
+| Planner | `dijkstra`, `hybrid_astar` |
+| Tracker | `pure_pursuit`, `lqr`, `adaptive_pure_pursuit` |
+| Misión | `goal`, `fixed_waypoints` |
+| Evasión reactiva | `reactive_avoidance:=true` o `false` |
+
+## Monitoreo y RViz
 
 ```bash
-# Dijkstra + Pure Pursuit (defaults)
-ros2 launch hotel_bringup navigation_2602_hotel.launch.py planner:=dijkstra tracker:=pure_pursuit
-
-# Hybrid A* + Pure Pursuit
-ros2 launch hotel_bringup navigation_2602_hotel.launch.py planner:=hybrid_astar tracker:=pure_pursuit
-
-# Dijkstra + LQR
-ros2 launch hotel_bringup navigation_2602_hotel.launch.py planner:=dijkstra tracker:=lqr
-
-# Hybrid A* + LQR
-ros2 launch hotel_bringup navigation_2602_hotel.launch.py planner:=hybrid_astar tracker:=lqr
+ros2 topic echo /reactive_avoidance/state
+ros2 topic echo /reactive_avoidance/ftg_valid_gap
+ros2 topic echo /reactive_avoidance/ftg_gap_width
+ros2 topic echo /reactive_avoidance/ftg_target_angle
+ros2 topic echo /reactive_avoidance/ftg_gap_details
+ros2 topic echo /cmd_vel_gap
+ros2 topic echo /cmd_vel_mux
+ros2 topic echo /path_tracking/current_speed
+ros2 topic echo /path_tracking/path_progress
+ros2 topic hz /cmd_vel_nav
+ros2 topic hz /cmd_vel_gap
+ros2 run tf2_ros tf2_echo map base_link
+ros2 run tf2_ros tf2_echo map odom
+ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-También se pueden ejecutar individualmente, sin duplicar publishers de `/planned_path` o `/cmd_vel_nav`:
+En RViz use Fixed Frame `map` y añada Map, LaserScan, Path, TF, RobotModel y `/reactive_avoidance/markers`.
+
+Los markers muestran el corredor futuro evaluado, los retornos/obstáculo bloqueante, el gap y target del FTG, el punto de reenganche y una etiqueta con el estado reactivo. Esto permite observar la transición `TRACKING -> AVOIDING -> REJOINING -> TRACKING` sin inferirla únicamente desde los comandos de velocidad.
+
+## Validación y resultados
 
 ```bash
-ros2 run path_planner_2602_hotel dijkstra_pp_2602_hotel
-ros2 run path_planner_2602_hotel hybrid_astar_pp_2602_hotel
-ros2 run path_tracker_2602_hotel pure_pursuit_pt_2602_hotel
-ros2 run path_tracker_2602_hotel lqr_pt_2602_hotel
+pytest -q \
+  src/hotel_path_planner/test/test_planning_core.py \
+  src/hotel_path_tracking/test/test_tracking_core.py \
+  src/hotel_ttc_follow_the_gap/test/test_reactive_core.py
 ```
 
-`twist_mux.yaml` ya configura `cmd_vel_nav`; joystick y teclado tienen prioridad mayor, así que déjelos inactivos en pruebas autónomas.
+En el estado documentado, las pruebas matemáticas de planificación/tracking dan **34 passed** y la suite reactiva da **13 passed**. Esta última incluye caja frontal, comparación contra FTG original, pipeline de gaps, persistencia/rejoin y límites cinemáticos.
 
-## Enviar un goal
+La comparación manual está en [`../optimization_results/comparison_run001_vs_run002.md`](../optimization_results/comparison_run001_vs_run002.md): Run 001: 755.031 s, 0.360 m/s, RMSE 0.102 m; Run 002: 455.640 s, 0.622 m/s, RMSE 0.063 m; mejora end-to-end 39.653%. Los paths/waypoints no fueron idénticos, por lo que no es atribución causal pura solo al controlador.
 
-En RViz use **2D Goal Pose** con frame `map`. Para una ejecución reproducible, `/goal_pose` es `geometry_msgs/PoseStamped`:
+Los informes históricos adicionales se conservan en [`results/`](results/); los resultados de planificación/tracking se deben interpretar con la configuración de mapa, spawn y waypoints registrada para cada ejecución.
 
-```bash
-ros2 topic pub --once /goal_pose geometry_msgs/msg/PoseStamped \
-"{header: {frame_id: map}, pose: {position: {x: 2.623, y: 7.949, z: 0.0}, orientation: {z: 0.707107, w: 0.707107}}}"
-```
+### Benchmarks históricos conservados
 
-La orientación importa especialmente con Hybrid A*, que verifica tolerancia de yaw final.
-
-## Parámetros importantes
-
-Estos son defaults de los nodos. El launch sobrescribe en Pure Pursuit `v_nominal=0.45`, `max_speed=0.50`, `max_omega=2.0`, `lookahead_L0=0.6` y `lookahead_min=0.3`.
-
-### Hybrid A*
-
-| Parámetro | Default | Efecto |
-|---|---:|---|
-| `xy_resolution` | 0.05 m | Resolución espacial de búsqueda. |
-| `theta_resolution` | 0.261799 rad | Resolución angular (15°). |
-| `motion_step` | 0.20 m | Longitud de las primitivas. |
-| `max_curvature` | 1.6 1/m | Curvatura máxima. |
-| `heuristic_weight` | 1.0 | Peso de heurística. |
-| `inflate_radius` | 0.25 m | Inflación de obstáculos. |
-| `turn_penalty` | 0.10 | Penalización por giro. |
-| `rotation_penalty` | 0.12 | Coste de giro in-place. |
-| `goal_position_tolerance` | 0.15 m | Tolerancia de posición. |
-| `goal_yaw_tolerance` | 0.349066 rad | Tolerancia angular (20°). |
-
-### LQR
-
-| Parámetro | Default | Efecto |
-|---|---:|---|
-| `control_rate_hz` | 25.0 Hz | Frecuencia de control. |
-| `v_nominal` | 0.45 m/s | Velocidad de referencia. |
-| `max_speed` | 0.50 m/s | Límite lineal. |
-| `max_omega` | 2.0 rad/s | Límite angular. |
-| `goal_tolerance` | 0.25 m | Radio de llegada. |
-| `lookahead_distance` | 0.25 m | Referencia adelantada. |
-| `q_x` | 1.0 | Peso longitudinal de Q. |
-| `q_lateral` | 6.0 | Peso lateral de Q. |
-| `q_heading` | 3.0 | Peso angular de Q. |
-| `r_linear` | 0.8 | Penalización lineal de R. |
-| `r_angular` | 0.6 | Penalización angular de R. |
-
-## Pruebas
-
-```bash
-colcon test --packages-select path_planner_2602_hotel path_tracker_2602_hotel hotel_bringup
-colcon test-result --verbose
-```
-
-Las pruebas matemáticas específicas están en `hotel_path_planner/test/test_planning_core.py` y `hotel_path_tracking/test/test_tracking_core.py`: discretización, colisión de arcos, paths orientados, modelo/Riccati LQR, saturación y llegada a goal. Las 10 pruebas específicas pasan. Actualmente, la suite completa de `colcon test`.
-
-## Experimentos, benchmarks y resultados
-
-Ejecute desde `src/`; los benchmarks no requieren Gazebo. El planner usa `OccupancyGrid` y el tracker una simulación cinemática offline de unicycle, no prueba física.
+El directorio [`experiments/`](experiments/) conserva los scripts offline de comparación de planners, barrido de Hybrid A*, benchmark de trackers y análisis de CSV. Se ejecutan desde `src/` y regeneran archivos bajo `results/`, por lo que no deben ejecutarse si se desea preservar un informe final concreto:
 
 ```bash
 cd /home/lenovo/mrad_ws_2602_hotel/src
@@ -246,43 +298,15 @@ python3 experiments/analyze_results.py
 python3 experiments/analyze_gazebo_results.py
 ```
 
-- `run_planner_benchmark.py`: comparación Dijkstra/Hybrid A* y paths/CSV.
-- `run_hybrid_astar_sweep.py`: sweep de `theta_resolution`.
-- `run_tracker_benchmark.py`: comparación y sweeps offline de trackers.
-- `analyze_results.py`: informe y gráficas offline.
-- `analyze_gazebo_results.py`: informe y gráficas a partir de CSV Gazebo.
+## Diagnóstico rápido
 
-Los resultados se guardan en `results/`: `planner_results.csv`, `tracker_trace.csv`, `tracker_results.csv`, `hybrid_astar_sweep.csv`, `lqr_sweep.csv`, `pure_pursuit_sweep.csv`, `gazebo_planner_results.csv`, `gazebo_tracker_results.csv`, `gazebo_tracker_trace.csv`, ambos informes Markdown y `results/plots/`. `analyze_results.py` regenera el informe offline; no lo ejecute si desea preservar el informe final validado tal como está.
+- **No se publica `/planned_path`:** compruebe `/map`, `map -> base_link`, `/initialpose` y que start/goal no estén ocupados o fuera del mapa.
+- **El robot no avanza:** inspeccione `/cmd_vel_nav`, `/cmd_vel_mux`, `/diffdrive_controller/cmd_vel` y que joystick/teclado no estén venciendo la prioridad autónoma del mux.
+- **FTG no toma una salida válida:** observe `ftg_valid_gap`, los contadores de gaps y `ftg_gap_details`; AEB sigue deteniendo el robot si el mando reactivo no encuentra un paso seguro.
 
-### Resultados medidos destacados
+## Problemas corregidos y decisiones
 
-En Gazebo, tramo recto `gazebo_map2_straight_repeated` (tres repeticiones por planner): Dijkstra tardó **16.881 ± 0.637 ms** y produjo **0.950 m**; Hybrid A* tardó **0.706 ± 0.108 ms** y produjo **1.000 m**. En tracking, una ejecución limpia por controlador midió CTE RMSE de **0.012474 m** para Pure Pursuit y **0.015519 m** para LQR; las tasas fueron 20.000 Hz y 20.002 Hz, respectivamente.
-
-El tracking Gazebo fue una ejecución reset-controlada por controlador: no es una conclusión estadística general ni se extrapola a curvas u obstáculos.
-
-## Troubleshooting
-
-**Robot inmóvil.** Compruebe tracker, `/cmd_vel_nav`, prioridad de joystick/teclado y TF.
-
-```bash
-ros2 topic echo /cmd_vel_nav
-ros2 topic info /diffdrive_controller/cmd_vel -v
-ros2 run tf2_ros tf2_echo map base_link
-```
-
-**El planner no publica ruta.** Verifique `/map`, `map → base_link`, start/goal ocupados e `inflate_radius`.
-
-```bash
-ros2 topic echo /map --once
-ros2 topic echo /planned_path --once
-ros2 topic list
-```
-
-**El tracker publica stop.** Es seguro ante path vacío, TF ausente o goal alcanzado.
-
-```bash
-ros2 topic echo /planned_path --once
-ros2 topic hz /cmd_vel_nav
-ros2 run tf2_ros tf2_echo map base_link
-```
-
+- `_parameters()` colisionaba con `rclpy.Node._parameters`; ahora es `_declare_parameters()`. También se retiró la redeclaración de `use_sim_time`.
+- La bubble múltiple eliminaba el FOV; se limita al retorno bloqueante más cercano.
+- Spawn físico y AMCL deben ser coherentes.
+- Hybrid A* sigue siendo global, FTG solo local, Adaptive PP nominal y AEB nunca se bypassa. La velocidad nominal no se redujo globalmente para incorporar evasión.

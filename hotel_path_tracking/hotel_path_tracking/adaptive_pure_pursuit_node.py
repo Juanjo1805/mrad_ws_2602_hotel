@@ -85,6 +85,9 @@ class AdaptivePurePursuitNode(Node):
         self.declare_parameter('environment', 'gazebo')
         self.declare_parameter('trace_csv', 'results/tracker_trace.csv')
         self.declare_parameter('results_csv', 'results/tracker_results.csv')
+        # Zero means disabled.  The reactive supervisor uses this only in
+        # REJOINING; TRACKING keeps the exact nominal adaptive profile.
+        self.declare_parameter('external_speed_limit_topic', '/reactive_avoidance/rejoin_speed_limit')
 
         self.path_topic = str(self.get_parameter('path_topic').value)
         self.command_topic = str(self.get_parameter('cmd_vel_topic').value)
@@ -139,6 +142,10 @@ class AdaptivePurePursuitNode(Node):
             Path, self.path_topic, self.on_path, path_qos())
         self.actual_v: float | None = None
         self.actual_omega: float | None = None
+        self.external_speed_limit = 0.0
+        self.external_speed_limit_subscription = self.create_subscription(
+            Float32, str(self.get_parameter('external_speed_limit_topic').value),
+            self.on_external_speed_limit, 10)
         self.odom_subscription = self.create_subscription(
             Odometry, str(self.get_parameter('odom_topic').value), self.on_odom, 30)
         self._create_diagnostic_publishers()
@@ -242,6 +249,11 @@ class AdaptivePurePursuitNode(Node):
         self.actual_v = linear if math.isfinite(linear) else None
         self.actual_omega = angular if math.isfinite(angular) else None
 
+    def on_external_speed_limit(self, message: Float32) -> None:
+        """Accept a temporary positive cap without changing nominal settings."""
+        value = float(message.data)
+        self.external_speed_limit = value if math.isfinite(value) and value > 0.0 else 0.0
+
     def robot_pose(self) -> Pose2D:
         transform = self.tf_buffer.lookup_transform(
             self.path_frame, self.base_frame, rclpy.time.Time(),
@@ -260,6 +272,7 @@ class AdaptivePurePursuitNode(Node):
         try:
             robot = self.robot_pose()
             command = self.tracker.command(self.path, robot, dt)
+            command = self.apply_external_speed_limit(command)
         except (TransformException, ValueError, FloatingPointError) as error:
             self.publish_stop()
             if now - self.last_log_time >= 1.0:
@@ -299,6 +312,15 @@ class AdaptivePurePursuitNode(Node):
         message.twist.linear.x = float(command.linear_velocity)
         message.twist.angular.z = float(command.angular_velocity)
         self.command_publisher.publish(message)
+
+    def apply_external_speed_limit(self, command: TrackingCommand) -> TrackingCommand:
+        """Cap rejoin speed while preserving commanded curvature and safety."""
+        if self.external_speed_limit <= 0.0 or command.linear_velocity <= self.external_speed_limit:
+            return command
+        ratio = self.external_speed_limit / max(command.linear_velocity, 1e-9)
+        command.linear_velocity = self.external_speed_limit
+        command.angular_velocity *= ratio
+        return command
 
     def _path_progress(self, closest_index: int) -> float:
         return self.tracker.progress_fraction(closest_index)

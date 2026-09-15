@@ -30,10 +30,10 @@ twist_mux:
         timeout : 0.5
         priority: 120
 
-      # gap-following control  : 
-      #   topic   : cmd_vel_gap
-      #   timeout : 0.5
-      #   priority: 300
+      reactive gap control:
+        topic   : cmd_vel_gap
+        timeout : 0.25
+        priority: 150
 
       # dwb control  : 
       #   topic   : cmd_vel_dwb

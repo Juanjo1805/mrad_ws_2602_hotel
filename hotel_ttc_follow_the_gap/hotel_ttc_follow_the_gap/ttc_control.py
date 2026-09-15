@@ -99,8 +99,8 @@ class TTCControl(Node):
         velocity = base_vel / (1.0 + self.slow_gain * abs(steering))
 
         # Preserve the original saturation order.
-        velocity = max(self.v_max, velocity)
-        return min(self.v_min, velocity)
+        velocity = max(self.v_min, velocity)
+        return min(self.v_max, velocity)
 
     def _publish_command(self, velocity, steering):
         if not self.rb_pressed:

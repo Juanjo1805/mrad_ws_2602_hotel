@@ -1,0 +1,48 @@
+reactive_avoidance_supervisor:
+  ros__parameters:
+    # Nominal tracking remains untouched; this node only gates FTG/rejoin.
+    enabled: true
+    path_topic: /planned_path
+    scan_topic: /scan
+    odom_topic: /ekf/odometry
+    base_frame: base_link
+    rate_hz: 10.0
+
+    # At v=1.0: max(1.10 + 0.55*v, v²/(2*1.40)+0.20*v+0.20+0.15) = 1.65 m.
+    preview_distance_base: 1.10
+    preview_distance_speed_gain: 0.55
+    minimum_preview_distance: 1.00
+    maximum_preview_distance: 2.50
+    deceleration_limit: 1.40
+    control_latency_s: 0.20
+    robot_front_extent: 0.20        # chassis x extent / 2: lx=0.40 m
+
+    # Chassis width ly=0.40 m in diffdrive_urdf/robot_core.xacro.
+    corridor_half_robot_width: 0.20
+    corridor_safety_margin: 0.15
+    obstacle_activation_distance: 2.20
+    obstacle_points_threshold: 3
+    activation_persistence_time: 0.30
+    clear_persistence_time: 0.60
+    minimum_avoiding_time: 0.80
+
+    ftg_max_linear_velocity: 0.68
+    ftg_max_angular_velocity: 2.00
+    ftg_steering_gain: 1.20
+    ftg_steering_slowdown: 1.20
+    wheel_linear_limit: 1.00
+    wheel_separation_m: 0.44
+    minimum_gap_width: 0.55
+    bubble_radius: 0.35
+    minimum_clearance: 0.12
+    ftg_path_bias_enabled: true
+    ftg_path_alignment_gain: 0.20
+    ftg_progress_gain: 0.10
+    ftg_fov_deg: 120.0
+
+    rejoin_max_linear_velocity: 0.68
+    rejoin_lateral_error_threshold: 0.15
+    rejoin_heading_error_threshold: 0.22
+    rejoin_stable_time: 0.80
+    rejoin_offset_distance: 0.70
+    map_topic: /map

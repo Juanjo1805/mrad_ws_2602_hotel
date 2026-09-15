@@ -68,14 +68,15 @@ def _acquire_recorder_lock(root: Path):
 
 
 def record(config: dict[str, Any], root: Path, run_id: int, name: str,
-           timeout_s: float, controller_node: str) -> bool:
+           timeout_s: float, controller: str, controller_node: str) -> bool:
     run_directory = root / _run_name(run_id, name)
     if run_directory.exists():
         raise FileExistsError(f'{run_directory} already exists; manual evidence is never overwritten.')
     run_directory.mkdir(parents=True)
     (run_directory / 'rosbag').mkdir()
     logs = run_directory / 'logs'
-    mission = config.get('mission', {})
+    mission = dict(config.get('mission', {}))
+    runtime = config.get('runtime', {})
     monitor_cfg = config.get('monitor', {})
     bag_topics = config.get('bag_topics', DEFAULT_BAG_TOPICS)
     if not isinstance(bag_topics, list) or not all(isinstance(item, str) for item in bag_topics):
@@ -89,7 +90,7 @@ def record(config: dict[str, Any], root: Path, run_id: int, name: str,
         'ros2', 'run', 'path_tracker_2602_hotel', 'optimization_monitor', '--ros-args',
         '-p', f'use_sim_time:={_format_value(monitor_cfg.get("use_sim_time", True))}',
         '-p', f'run_id:={run_id}',
-        '-p', 'controller:=pure_pursuit_standard',
+        '-p', f'controller:={controller}',
         '-p', f'results_file:={result_file}',
         '-p', f'trace_file:={trace_file}',
         '-p', f'initial_state_file:={initial_state_file}',
@@ -98,12 +99,12 @@ def record(config: dict[str, Any], root: Path, run_id: int, name: str,
         if key != 'use_sim_time':
             monitor_command.extend(['-p', f'{key}:={_format_value(value)}'])
     bag_command = ['ros2', 'bag', 'record', '-o', str(run_directory / 'rosbag' / name), *bag_topics]
-    readiness_command, _ = _readiness_command(config, 'localized', readiness_file)
+    readiness_command, _ = _readiness_command(runtime, 'localized', readiness_file)
     metadata = {
         'run_id': run_id,
         'name': name,
         'created_utc': datetime.now(timezone.utc).isoformat(),
-        'controller': 'pure_pursuit_standard',
+        'controller': controller,
         'mission': mission,
         'capture_mode': 'passive_manual_observation',
         'safety_note': 'AEB remains enabled and is observed; this recorder publishes no commands.',
@@ -113,12 +114,12 @@ def record(config: dict[str, Any], root: Path, run_id: int, name: str,
         'manual_sequence_reconstructed_from_history': [
             'ros2 launch hotel_bringup gz_spawn.launch.py',
             'ros2 launch hotel_bringup amcl_localization.launch.py map:=.../map_nuevo.yaml',
-            'publish /initialpose in map, then launch navigation_2602_hotel with Hybrid A* + Pure Pursuit',
+            'publish /initialpose in map, then launch navigation_2602_hotel with the selected tracker',
         ],
     }
     _dump_yaml(run_directory / 'metadata.yaml', metadata)
     _dump_yaml(run_directory / 'parameters.yaml', {
-        'controller': 'pure_pursuit_standard',
+        'controller': controller,
         'measurement_mode': 'passive_manual_observation',
         'monitor': monitor_cfg,
         'physical_limits': config.get('physical_limits', {}),
@@ -155,7 +156,7 @@ def record(config: dict[str, Any], root: Path, run_id: int, name: str,
                 # Both Gazebo interfaces below are read-only.  Capturing after
                 # readiness makes the physical reference contemporaneous with
                 # the AMCL/TF snapshot, without publishing any input pose.
-                _gazebo_pose_snapshot(config, run_directory / 'gazebo_ground_truth.yaml',
+                _gazebo_pose_snapshot(runtime, run_directory / 'gazebo_ground_truth.yaml',
                                       logs / 'gazebo_pose.log')
                 gazebo_snapshot_recorded = True
             if result_file.exists():
@@ -171,7 +172,7 @@ def record(config: dict[str, Any], root: Path, run_id: int, name: str,
             failure = 'manual_capture_timeout_waiting_for_result'
         _parameter_dump(controller_node, run_directory / 'resolved_controller_parameters.yaml')
         if not result_file.exists():
-            _write_failure(result_file, {'run_id': run_id, 'controller': 'pure_pursuit_standard',
+            _write_failure(result_file, {'run_id': run_id, 'controller': controller,
                                          'expected_laps': int(monitor_cfg.get('expected_laps', 2))}, failure)
     finally:
         # Do not stop anything except this recorder's own observer processes.
@@ -190,7 +191,7 @@ def main(args: list[str] | None = None) -> None:
     parser.add_argument('--run-id', type=int)
     parser.add_argument('--name', default='golden_manual_baseline')
     parser.add_argument('--timeout-s', type=float, default=1100.0)
-    parser.add_argument('--controller-node', default='/pure_pursuit_pt_2602_hotel')
+    parser.add_argument('--controller-node')
     parsed = parser.parse_args(args)
     config = _load_yaml(parsed.config.resolve())
     root = parsed.results_root or Path(config.get('results_root', 'optimization_results'))
@@ -198,11 +199,19 @@ def main(args: list[str] | None = None) -> None:
         root = Path.cwd() / root
     root.mkdir(parents=True, exist_ok=True)
     run_id = _next_run_id(root) if parsed.run_id is None else parsed.run_id
+    controller = str(config.get('controller', 'pure_pursuit_standard'))
+    default_nodes = {
+        'pure_pursuit_standard': '/pure_pursuit_pt_2602_hotel',
+        'adaptive_pure_pursuit': '/adaptive_pure_pursuit',
+    }
+    controller_node = parsed.controller_node or str(
+        config.get('controller_node', default_nodes.get(controller, '')))
     previous_sigint = signal.signal(signal.SIGINT, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))
     recorder_lock = None
     try:
         recorder_lock = _acquire_recorder_lock(root)
-        success = record(config, root, run_id, parsed.name, parsed.timeout_s, parsed.controller_node)
+        success = record(
+            config, root, run_id, parsed.name, parsed.timeout_s, controller, controller_node)
         raise SystemExit(0 if success else 1)
     except KeyboardInterrupt:
         print('Manual recorder interrupted; it did not modify the external stack.', flush=True)
