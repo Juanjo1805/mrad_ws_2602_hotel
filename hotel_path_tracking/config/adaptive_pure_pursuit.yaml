@@ -1,0 +1,44 @@
+# Initial manual-test candidate for Hybrid A* + Adaptive Pure Pursuit.
+# The requested tracker capability is doubled versus the standard controller
+# (0.90 / 1.00 / 4.00), but the core enforces the physical wheel interfaces.
+adaptive_pure_pursuit:
+  ros__parameters:
+    adaptive_speed_enabled: true
+
+    # Requested tracking limits.  With r=0.05 m and wheel limit=20 rad/s,
+    # the effective straight-line ceiling is 1.00 m/s.  The core still
+    # enforces this hardware/simulation limit for every curved command.
+    min_linear_velocity: 0.25
+    nominal_linear_velocity: 0.90
+    max_linear_velocity: 1.00
+    max_angular_velocity: 4.00
+    max_curvature: 2.00
+
+    # Ld = clamp((base + speed_gain * |v_cmd|) /
+    #            (1 + curvature_gain * |kappa_preview|), min, max)
+    lookahead_min: 0.30
+    lookahead_base: 0.60
+    lookahead_max: 1.20
+    lookahead_speed_gain: 0.60
+    lookahead_curvature_gain: 0.60
+
+    # v target is the minimum of nominal, curvature, preview, omega,
+    # lateral-error and heading-error ceilings, then rate limited.
+    curvature_speed_gain: 0.45
+    curvature_preview_distance: 1.20
+    lateral_error_speed_gain: 1.00
+    lateral_error_slowdown_threshold: 0.12
+    heading_error_speed_gain: 0.35
+    heading_error_slowdown_threshold: 0.17
+
+    acceleration_limit: 0.70
+    deceleration_limit: 1.40
+    angular_acceleration_limit: 5.00
+
+    # Matches diffdrive_controller and hotel_description/diffdrive_urdf.
+    wheel_radius_m: 0.05
+    wheel_separation_m: 0.44
+    wheel_max_angular_velocity: 20.0
+
+    odom_topic: /ekf/odometry
+    visualization_prefix: /path_tracking

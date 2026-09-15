@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist, TwistStamped
-from std_msgs.msg import Float32
+from std_msgs.msg import Bool, Float32
 
 class AEBNode(Node):
 
@@ -49,6 +49,14 @@ class AEBNode(Node):
         # ---------- publishers ----------
         self.cmd_pub  = self.create_publisher(TwistStamped, '/cmd_vel_out', 10)
         self.dist_pub = self.create_publisher(Twist,        '/dist_min',     10)
+        # These publishers are deliberately diagnostic-only: they expose the
+        # existing AEB state for a rosbag/experiment monitor and never feed
+        # back into the braking decision or command path.
+        self.active_pub = self.create_publisher(Bool, '/aeb/active', 10)
+        self.blocked_pub = self.create_publisher(Bool, '/aeb/command_blocked', 10)
+        self.ttc_pub = self.create_publisher(Float32, '/aeb/ttc', 10)
+        self.critical_distance_pub = self.create_publisher(
+            Float32, '/aeb/critical_distance', 10)
 
     # --------------------------------------------------
     # Callbacks
@@ -212,6 +220,16 @@ class AEBNode(Node):
             self.get_logger().warn("FWD_BLOCK ON")
         elif not self.forward_Block and prev_fb:
             self.get_logger().info("FWD_BLOCK OFF")
+
+        # Publish the measured safety state after the original logic above.
+        # ``active`` includes every AEB intervention state; ``command_blocked``
+        # means a forward command is currently suppressed.  Keeping TTC and
+        # range as separate topics makes post-run analysis independent of logs.
+        active = self.lock or self.braking or self.forward_Block
+        self.active_pub.publish(Bool(data=bool(active)))
+        self.blocked_pub.publish(Bool(data=bool(self.braking or self.forward_Block)))
+        self.ttc_pub.publish(Float32(data=float(ttc_min)))
+        self.critical_distance_pub.publish(Float32(data=float(self.d_min)))
 
     # --------------------------------------------------
     # CONTROL INPUTS

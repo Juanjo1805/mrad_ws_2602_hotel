@@ -39,6 +39,14 @@ def generate_launch_description():
     planner_results_csv = LaunchConfiguration('planner_results_csv')
     tracker_trace_csv = LaunchConfiguration('tracker_trace_csv')
     tracker_results_csv = LaunchConfiguration('tracker_results_csv')
+    adaptive_params_file = LaunchConfiguration('adaptive_params_file')
+    linear_velocity = LaunchConfiguration('linear_velocity')
+    max_linear_velocity = LaunchConfiguration('max_linear_velocity')
+    max_angular_velocity = LaunchConfiguration('max_angular_velocity')
+    lookahead_distance = LaunchConfiguration('lookahead_distance')
+    minimum_lookahead = LaunchConfiguration('minimum_lookahead')
+    maximum_lookahead = LaunchConfiguration('maximum_lookahead')
+    lookahead_gain = LaunchConfiguration('lookahead_gain')
     common = {
         'use_sim_time': use_sim_time,
         'scenario': scenario,
@@ -49,12 +57,25 @@ def generate_launch_description():
     tracker_parameters = {
         **common,
         'control_frequency': 25.0,
-        'linear_velocity': 0.45,
-        'max_linear_velocity': 0.50,
-        'max_angular_velocity': 2.0,
-        'lookahead_distance': 0.60,
-        'minimum_lookahead': 0.30,
-        'maximum_lookahead': 1.20,
+        'linear_velocity': linear_velocity,
+        'max_linear_velocity': max_linear_velocity,
+        'max_angular_velocity': max_angular_velocity,
+        'lookahead_distance': lookahead_distance,
+        'lookahead_gain': lookahead_gain,
+        'minimum_lookahead': minimum_lookahead,
+        'maximum_lookahead': maximum_lookahead,
+        'goal_tolerance': 0.25,
+        'yaw_tolerance': 0.21,
+        'goal_progress_fraction': 0.95,
+        'trace_csv': tracker_trace_csv,
+        'results_csv': tracker_results_csv,
+    }
+    # Adaptive PP receives a separate YAML.  It is intentionally not overlaid
+    # with the baseline launch defaults above: selecting the adaptive tracker
+    # must not silently turn it back into the standard 0.45/0.50/2.0 setup.
+    adaptive_parameters = {
+        **common,
+        'control_frequency': 25.0,
         'goal_tolerance': 0.25,
         'yaw_tolerance': 0.21,
         'goal_progress_fraction': 0.95,
@@ -66,11 +87,16 @@ def generate_launch_description():
         'config',
         'fixed_waypoints.yaml',
     )
+    default_adaptive_params = os.path.join(
+        get_package_share_directory('path_tracker_2602_hotel'),
+        'config',
+        'adaptive_pure_pursuit.yaml',
+    )
     return LaunchDescription([
         DeclareLaunchArgument('planner', default_value='dijkstra',
                               description='dijkstra | hybrid_astar'),
         DeclareLaunchArgument('tracker', default_value='pure_pursuit',
-                              description='pure_pursuit | lqr'),
+                              description='pure_pursuit | adaptive_pure_pursuit | lqr'),
         DeclareLaunchArgument('mission_mode', default_value='goal',
                               description='goal | fixed_waypoints'),
         DeclareLaunchArgument('waypoints_file', default_value=default_waypoints,
@@ -80,6 +106,18 @@ def generate_launch_description():
         DeclareLaunchArgument('planner_results_csv', default_value='results/planner_results.csv'),
         DeclareLaunchArgument('tracker_trace_csv', default_value='results/tracker_trace.csv'),
         DeclareLaunchArgument('tracker_results_csv', default_value='results/tracker_results.csv'),
+        DeclareLaunchArgument(
+            'adaptive_params_file', default_value=default_adaptive_params,
+            description='ROS parameter YAML used only by tracker:=adaptive_pure_pursuit'),
+        # Exposing the pre-existing Pure Pursuit values as launch arguments
+        # lets the experiment runner record and replay a baseline verbatim.
+        DeclareLaunchArgument('linear_velocity', default_value='0.45'),
+        DeclareLaunchArgument('max_linear_velocity', default_value='0.50'),
+        DeclareLaunchArgument('max_angular_velocity', default_value='2.0'),
+        DeclareLaunchArgument('lookahead_distance', default_value='0.60'),
+        DeclareLaunchArgument('lookahead_gain', default_value='1.3'),
+        DeclareLaunchArgument('minimum_lookahead', default_value='0.30'),
+        DeclareLaunchArgument('maximum_lookahead', default_value='1.20'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('scenario', default_value='manual'),
         DeclareLaunchArgument('trial', default_value='0'),
@@ -123,6 +161,14 @@ def generate_launch_description():
             output='screen',
             condition=tracker_condition(tracker, 'pure_pursuit'),
             parameters=[tracker_parameters],
+        ),
+        Node(
+            package='path_tracker_2602_hotel',
+            executable='adaptive_pure_pursuit',
+            name='adaptive_pure_pursuit',
+            output='screen',
+            condition=tracker_condition(tracker, 'adaptive_pure_pursuit'),
+            parameters=[adaptive_params_file, adaptive_parameters],
         ),
         Node(
             package='path_tracker_2602_hotel',

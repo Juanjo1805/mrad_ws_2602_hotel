@@ -1,0 +1,123 @@
+# Baseline-only protocol.  It preserves the original Pure Pursuit executable
+# and restarts Gazebo + AMCL before the run so initial state is controlled.
+results_root: optimization_results
+
+physical_limits:
+  wheel_radius_m: 0.05
+  wheel_separation_m: 0.44
+  wheel_max_angular_velocity_rad_s: 20.0
+  derived_max_linear_velocity_m_s: 1.00
+
+mission:
+  planner: hybrid_astar
+  tracker: pure_pursuit
+  mission_mode: fixed_waypoints
+  laps: 2
+  waypoints_file: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_planner/config/fixed_waypoints.yaml
+  use_sim_time: true
+  scenario: optimization_baseline
+  environment: gazebo
+
+runtime:
+  # Restarting all three launches per run is the reset mechanism.  Do not set
+  # a different world/map here for candidates in the same experiment campaign.
+  reset_policy: restart_stack_per_run
+  # Fixed, user-validated initial condition in the map frame.  Its yaw need
+  # not equal Gazebo's world-frame spawn yaw: the map/world alignment is part
+  # of localization and is deliberately held constant across candidates.
+  initial_pose:
+    x: 0.0
+    y: 0.0
+    yaw: 0.0
+    frame_id: map
+  # This is the resolved form of the launch command found in the successful
+  # manual shell history.  The map pose below remains (0,0,0), but Gazebo's
+  # physical spawn must be (-15.4,0,0.5,1.57); they are different frames.
+  common_start_commands:
+    - ros2 launch hotel_bringup gz_spawn.launch.py gz_mode:=true world:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/worlds/exam1_world_obs.sdf start_ekf:=true x_pose:=-15.4 y_pose:=0.0 z_pose:=0.5 roll:=0.0 pitch:=0.0 yaw:=1.57
+    - ros2 launch hotel_bringup amcl_localization.launch.py map:=/home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map_nuevo.yaml
+  navigation_command: ros2 launch hotel_bringup navigation_2602_hotel.launch.py
+  required_controller: diffdrive_controller
+  controller_ready_timeout_s: 60.0
+  amcl_node: /amcl
+  amcl_ready_timeout_s: 45.0
+  gazebo_world_name: empty_world
+  gazebo_model_name: diffbot
+  # No fixed startup sleep is used.  Navigation starts only after the two
+  # observer-only readiness stages below have passed.
+  readiness:
+    bootstrap_timeout_s: 75.0
+    localized_timeout_s: 75.0
+    stable_window_s: 2.0
+    sample_frequency_hz: 10.0
+    minimum_odom_samples: 15
+    minimum_scan_samples: 5
+    minimum_tf_samples: 10
+    minimum_amcl_samples: 1
+    minimum_odom_rate_hz: 5.0
+    minimum_scan_rate_hz: 1.0
+    maximum_amcl_x_covariance_m2: 2.0
+    maximum_amcl_y_covariance_m2: 2.0
+    maximum_amcl_yaw_covariance_rad2: 1.0
+  start_grace_s: 90.0
+
+# These inputs are fingerprinted into metadata.yaml.  This lets a later run
+# demonstrate the exact world, map, safety, localization and tracking code it
+# used, rather than relying on a launch command remembered by hand.
+provenance_files:
+  world_sdf: /home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/worlds/exam1_world_obs.sdf
+  map_yaml: /home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map_nuevo.yaml
+  map_image: /home/lenovo/mrad_ws_2602_hotel/src/hotel_gazebo/maps/map_nuevo.pgm
+  waypoints: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_planner/config/fixed_waypoints.yaml
+  gazebo_launch: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/launch/gz_spawn.launch.py
+  amcl_launch: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/launch/amcl_localization.launch.py
+  navigation_launch: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/launch/navigation_2602_hotel.launch.py
+  amcl_parameters: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/config/nav2_params.yaml
+  ekf_parameters: /home/lenovo/mrad_ws_2602_hotel/src/hotel_ekf/config/ekf_params.yaml
+  aeb_node: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/hotel_bringup/aeb_node.py
+  lidar_processing: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/hotel_bringup/lidar_data.py
+  twist_mux: /home/lenovo/mrad_ws_2602_hotel/src/hotel_bringup/config/twist_mux.yaml
+  pure_pursuit: /home/lenovo/mrad_ws_2602_hotel/src/hotel_path_tracking/hotel_path_tracking/pure_pursuit_node.py
+
+monitor:
+  expected_laps: 2
+  sample_frequency: 25.0
+  odom_topic: /ekf/odometry
+  maximum_duration_s: 900.0
+  critical_lateral_error_m: 1.00
+  critical_error_duration_s: 1.5
+  # AEB is measured, never used by itself to abort a candidate.  A run fails
+  # only after this complete window proves no path progress, displacement,
+  # closest-index advance, linear motion, or recovery rotation.
+  stuck_window_s: 45.0
+  stuck_min_progress_m: 0.12
+  stuck_min_distance_m: 0.12
+  stuck_min_closest_index_delta: 3
+  stuck_max_actual_linear_speed_m_s: 0.025
+  stuck_recovery_angular_speed_rad_s: 0.08
+  stuck_command_speed_threshold_m_s: 0.04
+  finish_radius_m: 0.60
+  lap_progress_fraction: 0.95
+  curvature_preview_distance: 1.0
+  max_angular_velocity: 2.0
+  wheel_radius_m: 0.05
+  wheel_separation_m: 0.44
+  wheel_max_angular_velocity: 20.0
+
+candidates:
+  - run_id: 11
+    name: baseline_spawn_corrected_repeat_1
+    controller: pure_pursuit_standard
+    controller_node: /pure_pursuit_pt_2602_hotel
+    parameters:
+      linear_velocity: 0.45
+      max_linear_velocity: 0.50
+      max_angular_velocity: 2.0
+      lookahead_distance: 0.60
+      minimum_lookahead: 0.30
+      maximum_lookahead: 1.20
+    notes:
+      - Original Pure Pursuit, no adaptive speed or lookahead logic.
+      - Hybrid A*, waypoint file, AEB, physics and localization are unchanged.
+      - Repeat of run_010 with identical tracking/safety parameters and the same
+        physical Gazebo spawn + AMCL map pose, for baseline reproducibility.
