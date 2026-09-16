@@ -10,9 +10,9 @@ reactive_avoidance_supervisor:
 
     # At v=1.0: max(1.10 + 0.55*v, v²/(2*1.40)+0.20*v+0.20+0.15) = 1.65 m.
     preview_distance_base: 1.10
-    preview_distance_speed_gain: 0.55
+    preview_distance_speed_gain: 0.55 #1.40
     minimum_preview_distance: 1.00
-    maximum_preview_distance: 2.50
+    maximum_preview_distance: 2.50 #6.00
     deceleration_limit: 1.40
     control_latency_s: 0.20
     robot_front_extent: 0.20        # chassis x extent / 2: lx=0.40 m
@@ -20,7 +20,7 @@ reactive_avoidance_supervisor:
     # Chassis width ly=0.40 m in diffdrive_urdf/robot_core.xacro.
     corridor_half_robot_width: 0.20
     corridor_safety_margin: 0.15
-    obstacle_activation_distance: 2.20
+    obstacle_activation_distance: 2.20 #6.00
     obstacle_points_threshold: 3
     activation_persistence_time: 0.30
     clear_persistence_time: 0.60

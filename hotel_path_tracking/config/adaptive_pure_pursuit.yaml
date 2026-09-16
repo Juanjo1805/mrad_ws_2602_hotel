@@ -14,6 +14,13 @@ adaptive_pure_pursuit:
     max_angular_velocity: 4.00
     max_curvature: 2.00
 
+
+    # min_linear_velocity: 0.25
+    # nominal_linear_velocity: 2.70
+    # max_linear_velocity: 3.00
+    # max_angular_velocity: 4.00
+    # max_curvature: 2.00
+
     # Ld = clamp((base + speed_gain * |v_cmd|) /
     #            (1 + curvature_gain * |kappa_preview|), min, max)
     lookahead_min: 0.30
@@ -21,6 +28,12 @@ adaptive_pure_pursuit:
     lookahead_max: 1.20
     lookahead_speed_gain: 0.60
     lookahead_curvature_gain: 0.60
+
+    # lookahead_min: 0.30
+    # lookahead_base: 0.60
+    # lookahead_max: 2.40
+    # lookahead_speed_gain: 0.60
+    # lookahead_curvature_gain: 0.60
 
     # v target is the minimum of nominal, curvature, preview, omega,
     # lateral-error and heading-error ceilings, then rate limited.
@@ -31,14 +44,30 @@ adaptive_pure_pursuit:
     heading_error_speed_gain: 0.35
     heading_error_slowdown_threshold: 0.17
 
+    # curvature_speed_gain: 0.45
+    # curvature_preview_distance: 4.00
+    # lateral_error_speed_gain: 1.00
+    # lateral_error_slowdown_threshold: 0.12
+    # heading_error_speed_gain: 0.35
+    # heading_error_slowdown_threshold: 0.17
+
     acceleration_limit: 0.70
     deceleration_limit: 1.40
     angular_acceleration_limit: 5.00
+    
+    # acceleration_limit: 1.40
+    # deceleration_limit: 1.40
+    # angular_acceleration_limit: 5.00
+    
 
     # Matches diffdrive_controller and hotel_description/diffdrive_urdf.
     wheel_radius_m: 0.05
     wheel_separation_m: 0.44
     wheel_max_angular_velocity: 20.0
+
+    # wheel_radius_m: 0.05
+    # wheel_separation_m: 0.44
+    # wheel_max_angular_velocity: 90.0
 
     odom_topic: /ekf/odometry
     visualization_prefix: /path_tracking
