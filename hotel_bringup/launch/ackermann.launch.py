@@ -201,7 +201,7 @@ def generate_launch_description():
     # ── AEB ───────────────────────────────────────────────────────────────
     aeb_node = Node(
         package=bringup_pkg,
-        executable="aeb_node",
+        executable="aeb_legacy_node",
         output="screen",
     )
 

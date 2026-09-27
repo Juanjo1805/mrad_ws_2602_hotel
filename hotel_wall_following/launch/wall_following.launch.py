@@ -30,13 +30,13 @@ def generate_launch_description():
 
     max_velocity_arg = DeclareLaunchArgument(
         'max_velocity',
-        default_value='1.7',
+        default_value='3.5',
         description='Velocidad maxima cuando el robot esta alineado, en m/s'
     )
 
     min_velocity_arg = DeclareLaunchArgument(
         'min_velocity',
-        default_value='1.33',
+        default_value='2.5',
         description='Velocidad minima durante el seguimiento de pared, en m/s'
     )
 

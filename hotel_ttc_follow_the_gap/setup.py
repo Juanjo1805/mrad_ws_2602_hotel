@@ -28,6 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+                        'rc_gap_node=hotel_ttc_follow_the_gap.rc_node:main',
                         'ttc_gap_finder=hotel_ttc_follow_the_gap.ttc_gap_finder:main',
                         'ttc_control=hotel_ttc_follow_the_gap.ttc_control:main',
                         'reactive_avoidance_supervisor=hotel_ttc_follow_the_gap.reactive_avoidance_supervisor:main',

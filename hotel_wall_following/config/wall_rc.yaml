@@ -1,0 +1,14 @@
+rc_wall:
+  ros__parameters:
+    use_sim_time: false
+    throttle: 0.08
+    steering_limit: 0.25
+    steering_gain: 0.7
+    steering_sign: 1.0
+    lidar_yaw_deg: 0.0
+    scan_frame: laser_frame
+    scan_timeout: 0.3
+    enable_timeout: 0.5
+    desired_distance: 0.72
+    theta_deg: 48.0
+    lookahead_dist: 0.3

@@ -83,10 +83,6 @@ class TTCControl(Node):
         steering = steering / (1.0 + abs(steering)) * self.max_steering
         steering = self._clamp(steering, -self.max_steering, self.max_steering)
 
-        if steering > 0.1 and steering < 1.4:
-            return 1.4
-        if steering < -0.1 and steering > -1.4:
-            return -1.4
         return steering
 
     def _calculate_velocity(self, steering):

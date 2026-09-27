@@ -28,6 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+                        'rc_wall_node=hotel_wall_following.rc_node:main',
                         'dist_finder=hotel_wall_following.dist_finder:main',
                         'control=hotel_wall_following.control:main',
         ],

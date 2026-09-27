@@ -1,8 +1,11 @@
-from setuptools import find_packages, setup
-import os
-from glob import glob
+"""Install RC nodes, launch descriptions, calibration and operating instructions."""
 
-package_name = 'hotel_bringup'
+from glob import glob
+import os
+
+from setuptools import find_packages, setup
+
+package_name = 'ybeb_2602_zulu'
 
 setup(
     name=package_name,
@@ -12,15 +15,15 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml', 'README.md']),
-        (os.path.join('share', package_name,'config'), glob('config/*.*')),
-        (os.path.join('share', package_name,'launch'), glob('launch/*.*')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'docs'), glob('docs/*.md')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='carlos',
-    maintainer_email='carlos@todo.todo',
-    description='TODO: Package description',
+    maintainer='rpi5master',
+    maintainer_email='rpi5master@todo.todo',
+    description='RC guarded Rosmaster interface and shared safety contracts',
     license='TODO: License declaration',
     extras_require={
         'test': [
@@ -29,10 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'aeb_legacy_node=hotel_bringup.aeb_legacy_node:main',
-            'twist_key_to_stamped=hotel_bringup.twist_key_to_stamped:main',
-            'aeb_node=hotel_bringup.aeb_node:main',
-            'lidar_data=hotel_bringup.lidar_data:main',
+            'ybeb_node = ybeb_2602_zulu.ybeb_node:main',
         ],
     },
 )

@@ -1,259 +1,103 @@
-#!/usr/bin/env python3
-import numpy as np
+"""RC AEB: selected TwistStamped and real LaserScan to guarded TwistStamped."""
+
+from dataclasses import fields
+import math
+import time
+
+from geometry_msgs.msg import TwistStamped
+from hotel_bringup.safety_core import AEBConfig, AEBController
 import rclpy
+from rclpy.clock import Clock, ClockType
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import Twist, TwistStamped
-from std_msgs.msg import Bool, Float32
+from std_msgs.msg import Bool, Float32, String
+from ybeb_2602_zulu.ros_support import finite_twist, read_parameter, stamp_lifetime
+from ybeb_2602_zulu.safety_core import Limits
+from ybeb_2602_zulu.scan_support import Scan
+
 
 class AEBNode(Node):
+    """Publish a fresh decision periodically; input callbacks never bypass AEB."""
 
-    def __init__(self):
-        super().__init__('aeb')
+    def __init__(self, **kwargs):
+        """Configure immutable parameters and real-time safety timers."""
+        super().__init__('rc_aeb', **kwargs)
+        defaults = AEBConfig()
+        config = AEBConfig(**{
+            f.name: read_parameter(self, f.name, getattr(defaults, f.name))
+            for f in fields(defaults)})
+        limits = Limits(read_parameter(self, 'throttle_limit', 0.4),
+                        read_parameter(self, 'steering_limit', 0.5))
+        self.core = AEBController(config, limits)
+        self.future_tolerance = read_parameter(self, 'future_stamp_tolerance', 0.1)
+        self.scan_frame = read_parameter(self, 'scan_frame', 'laser_frame')
+        self.output_frame = read_parameter(self, 'output_frame', 'base_link')
+        rate = read_parameter(self, 'output_rate', 25.0)
+        if not math.isfinite(rate) or not 10 <= rate <= 100:
+            raise ValueError('output_rate must be between 10 and 100 Hz')
+        if not math.isfinite(self.future_tolerance) or not 0 <= self.future_tolerance <= 0.5:
+            raise ValueError('future_stamp_tolerance must be in [0, 0.5]')
+        if self.get_parameter('use_sim_time').value:
+            raise ValueError('RC safety nodes require use_sim_time=false')
+        self.last_scan_stamp = -1
+        self.last_reason = None
+        self.pub = self.create_publisher(TwistStamped, '/cmd_vel_stamped', 1)
+        self.active_pub = self.create_publisher(Bool, '/aeb/active', 1)
+        self.reason_pub = self.create_publisher(String, '/aeb/reason', 1)
+        self.ttc_pub = self.create_publisher(Float32, '/aeb/ttc', 1)
+        self.create_subscription(TwistStamped, '/cmd_vel_mux', self.command_callback, 1)
+        self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile_sensor_data)
+        self.steady_clock = Clock(clock_type=ClockType.STEADY_TIME)
+        self.timer = self.create_timer(1.0 / rate, self.publish_decision, clock=self.steady_clock)
 
-        # ---------- parameters ----------
-        self.declare_parameter("ttc_threshold",       0.45)
-        self.declare_parameter("secure_min_distance", 0.6)
-        self.declare_parameter("robot_radius",        0.45)
-        self.declare_parameter("min_speed",           0.05)
-        self.declare_parameter("brake_gain",          1.5)   # fracción de v_ctrl aplicada como freno
-        self.declare_parameter("brake_max",           2.0)   # límite absoluto del comando de freno
+    def command_callback(self, message):
+        """Reject nonfinite commands and stale source stamps before storing them."""
+        lifetime = stamp_lifetime(message, self.get_clock().now().nanoseconds,
+                                  self.core.config.command_timeout, self.future_tolerance)
+        self.core.watchdog.update(message.twist.linear.x, message.twist.angular.z,
+                                  time.monotonic(), finite_twist(message), lifetime)
 
-        self.ttc_threshold       = float(self.get_parameter("ttc_threshold").value)
-        self.secure_min_distance = float(self.get_parameter("secure_min_distance").value)
-        self.radius              = float(self.get_parameter("robot_radius").value)
-        self.min_speed           = float(self.get_parameter("min_speed").value)
-        self.brake_gain          = float(self.get_parameter("brake_gain").value)
-        self.brake_max           = float(self.get_parameter("brake_max").value)
+    def scan_callback(self, message):
+        """Invalidate stale/repeated scans; BEST_EFFORT supports real sensor QoS."""
+        lifetime = stamp_lifetime(message, self.get_clock().now().nanoseconds,
+                                  self.core.config.scan_timeout, self.future_tolerance)
+        stamp = message.header.stamp.sec * 1000000000 + message.header.stamp.nanosec
+        valid = message.header.frame_id == self.scan_frame and stamp > self.last_scan_stamp
+        if valid and lifetime > 0:
+            self.last_scan_stamp = stamp
+        scan = Scan(tuple(message.ranges), message.angle_min, message.angle_increment,
+                    message.angle_max, message.range_min, message.range_max)
+        self.core.update_scan(scan, time.monotonic(), valid, lifetime)
 
-        # ---------- state ----------
-        self.lock          = False
-        self.forward_Block = False
-        self.braking       = False   # True mientras aplica contracorriente
-
-        self.v_ctrl      = 0.0
-        self.d_min       = float('inf')
-        self.front_ranges = None
-        self.front_angles = None
-        self.twist_w     = 0.0
-        self.count_release = 0
-
-        # ---------- subscribers ----------
-        self.create_subscription(Float32,      '/lidar/vctrl',      self.vctrl_callback,  10)
-        self.create_subscription(Float32,      '/lidar/d_min',      self.dmin_callback,   10)
-        self.create_subscription(LaserScan,    '/lidar/front_scan', self.scan_callback,   10)
-        # self.create_subscription(TwistStamped, '/cmd_vel_joy',      self.cmdjoy_callback,  10)
-        # self.create_subscription(TwistStamped, '/cmd_vel_ctrl',     self.cmdctrl_callback, 10)
-        self.create_subscription(TwistStamped, '/cmd_vel_mux',     self.cmdmux_callback, 10)
-
-        # ---------- publishers ----------
-        self.cmd_pub  = self.create_publisher(TwistStamped, '/cmd_vel_out', 10)
-        self.dist_pub = self.create_publisher(Twist,        '/dist_min',     10)
-        # These publishers are deliberately diagnostic-only: they expose the
-        # existing AEB state for a rosbag/experiment monitor and never feed
-        # back into the braking decision or command path.
-        self.active_pub = self.create_publisher(Bool, '/aeb/active', 10)
-        self.blocked_pub = self.create_publisher(Bool, '/aeb/command_blocked', 10)
-        self.ttc_pub = self.create_publisher(Float32, '/aeb/ttc', 10)
-        self.critical_distance_pub = self.create_publisher(
-            Float32, '/aeb/critical_distance', 10)
-
-    # --------------------------------------------------
-    # Callbacks
-    # --------------------------------------------------
-
-    def vctrl_callback(self, msg):
-        self.v_ctrl = msg.data
-
-    def dmin_callback(self, msg):
-        self.d_min = msg.data
-
-    def scan_callback(self, msg):
-        ranges = np.array(msg.ranges)
-        angles = msg.angle_min + np.arange(len(ranges)) * msg.angle_increment
-        self.front_ranges = ranges
-        self.front_angles = angles
-        self.process_aeb()
-    
-    def cmdmux_callback(self, msg):
-        """Solo pasa el comando si no hay bloqueo activo."""
-        self.twist_w = msg.twist.angular.z
-
-        if self.braking:
-            # No pasar nada: process_aeb ya publica el freno
-            return
-
-        if self.forward_Block and msg.twist.linear.x > 0:
-            self._publish_zero()
-            self.get_logger().warn("FWD_BLOCK: avance bloqueado")
-            return
-
-        # Pass-through normal
+    def publish_decision(self):
+        """Output neutral on expiry, invalid input or a latched TTC hazard."""
+        decision = self.core.evaluate(time.monotonic())
         out = TwistStamped()
-        out.header.stamp    = self.get_clock().now().to_msg()
-        out.twist.linear.x  = msg.twist.linear.x
-        out.twist.angular.z = msg.twist.angular.z
-        self.cmd_pub.publish(out)
-
-    # --------------------------------------------------
-    # TTC
-    # --------------------------------------------------
-
-    def _ttc_calculus(self):
-        vx = self.v_ctrl
-        if vx < self.min_speed or self.front_ranges is None:
-            return float('inf')
-
-        v_closing = vx * np.cos(self.front_angles)
-        mask = v_closing > 0.1
-
-        if not np.any(mask):
-            return float('inf')
-
-        dist = self.front_ranges[mask] - self.radius
-        if np.any(dist <= 0.0):
-            return 0.0
-
-        ttc = dist / v_closing[mask]
-        return float(np.min(ttc)) if ttc.size else float('inf')
-
-    # --------------------------------------------------
-    # Publish helpers
-    # --------------------------------------------------
-
-    def _publish_brake(self):
-        if self.d_min <= self.radius:
-            brake_cmd = -self.brake_max
-        else:
-            brake_cmd = -min(self.v_ctrl * self.brake_gain, self.brake_max)
-        out = TwistStamped()
-        out.header.stamp    = self.get_clock().now().to_msg()
-        out.twist.linear.x  = brake_cmd
-        out.twist.angular.z = self.twist_w
-        self.cmd_pub.publish(out)
-
-    def _publish_zero(self):
-        """Cero de velocidad: carro detenido, no empuja hacia atrás."""
-        out = TwistStamped()
-        out.header.stamp    = self.get_clock().now().to_msg()
-        out.twist.linear.x  = 0.0
-        out.twist.angular.z = self.twist_w
-        self.cmd_pub.publish(out)
-
-    # --------------------------------------------------
-    # Forward block
-    # --------------------------------------------------
-
-    # def _forward_Block_(self, msg):
-    #     if self.forward_Block and msg.twist.linear.x > 0:
-    #         self._publish_zero()
-    #         self.get_logger().warn("FWD_BLOCK: avance bloqueado")
-
-    # --------------------------------------------------
-    # MAIN AEB LOGIC
-    # --------------------------------------------------
-
-    def process_aeb(self):
-
-        ttc_min   = self._ttc_calculus()
-        prev_lock = self.lock
-
-        # debug
-        dist_msg = Twist()
-        dist_msg.linear.x = self.d_min
-        dist_msg.linear.y = self.v_ctrl
-        self.dist_pub.publish(dist_msg)
-
-        # ── LOCK condition ──────────────────────────────
-        self.lock = (self.d_min <= 1.4) and (ttc_min < self.ttc_threshold) or self.d_min <= self.radius
-
-        if self.lock and not prev_lock:
-            # self.braking = True
-            self.get_logger().warn(
-                f"LOCK ON  | TTC={ttc_min:.2f}s | v_ctrl={self.v_ctrl:.2f} | dmin={self.d_min:.2f}"
-            )
-        elif not self.lock and prev_lock:
-
-            #self.braking = False
-            self.get_logger().info(
-                f"LOCK OFF | TTC={ttc_min:.2f}s | v_ctrl={self.v_ctrl:.2f} | dmin={self.d_min:.2f}"
-            )
-
-        # # ── BRAKE OUTPUT ────────────────────────────────
-        # if self.lock:
-        #     if self.braking and self.v_ctrl > self.min_speed:
-        #         self.count_release = 0
-        #         # carro aún en movimiento → contracorriente
-        #         self._publish_brake()
-        #     else:
-        #         # carro detenido → mantener cero, no empujar hacia atrás
-        #         self.count_release += 1
-        #         if self.count_release >= 3:  # requiere varias lecturas seguidas de distancia
-        #             self.braking = False
-        #         self._publish_zero()
-        # else:
-        #     if prev_lock:
-        #         self._publish_zero()
-        #     self.count_release = 0
-
-        if self.lock and self.v_ctrl > self.min_speed * 2:
-            self.braking = True
-
-        if self.braking:
-            if self.v_ctrl > self.min_speed:
-                self._publish_brake()
-            else:
-                self.braking = False
-                self.get_logger().info("BRAKING released")
-                # Mientras no sea seguro, mantener cero (no empujar, no liberar)
-                self._publish_zero()
-
-        # ── FORWARD BLOCK ───────────────────────────────
-        prev_fb = self.forward_Block
-
-        if self.lock and (self.d_min < self.secure_min_distance):
-            self.forward_Block = True
-        elif self.forward_Block and (self.d_min >= self.secure_min_distance):
-            self.forward_Block = False
-                
-        if self.forward_Block and not prev_fb:
-            self.get_logger().warn("FWD_BLOCK ON")
-        elif not self.forward_Block and prev_fb:
-            self.get_logger().info("FWD_BLOCK OFF")
-
-        # Publish the measured safety state after the original logic above.
-        # ``active`` includes every AEB intervention state; ``command_blocked``
-        # means a forward command is currently suppressed.  Keeping TTC and
-        # range as separate topics makes post-run analysis independent of logs.
-        active = self.lock or self.braking or self.forward_Block
-        self.active_pub.publish(Bool(data=bool(active)))
-        self.blocked_pub.publish(Bool(data=bool(self.braking or self.forward_Block)))
-        self.ttc_pub.publish(Float32(data=float(ttc_min)))
-        self.critical_distance_pub.publish(Float32(data=float(self.d_min)))
-
-    # --------------------------------------------------
-    # CONTROL INPUTS
-    # --------------------------------------------------
-
-    # def cmdjoy_callback(self, msg):
-    #     self.twist_w = msg.twist.angular.z
-    #     self._forward_Block_(msg)
-
-    # def cmdctrl_callback(self, msg):
-    #     self.twist_w = msg.twist.angular.z
-    #     self._forward_Block_(msg)
+        out.header.stamp = self.get_clock().now().to_msg()
+        out.header.frame_id = self.output_frame
+        out.twist.linear.x = decision.throttle
+        out.twist.angular.z = decision.steering
+        self.pub.publish(out)
+        self.active_pub.publish(Bool(data=decision.active))
+        self.reason_pub.publish(String(data=decision.reason))
+        self.ttc_pub.publish(Float32(data=decision.ttc))
+        if decision.reason != self.last_reason:
+            self.get_logger().info(f'AEB: {decision.reason}')
+            self.last_reason = decision.reason
 
 
 def main(args=None):
+    """Run AEB; hardware independently neutralizes if this process exits."""
     rclpy.init(args=args)
-    node = AEBNode()
+    node = None
     try:
+        node = AEBNode()
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.try_shutdown()

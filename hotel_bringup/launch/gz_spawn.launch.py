@@ -155,7 +155,7 @@ def generate_launch_description():
 
     aeb_node = Node(
         package=bringup_pkg_name,
-        executable='aeb_node',
+        executable='aeb_legacy_node',
         output='screen',
         remappings=[('/cmd_vel_out','/diffdrive_controller/cmd_vel')]
     )

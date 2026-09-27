@@ -1,0 +1,9 @@
+ybeb_node:
+  ros__parameters:
+    use_sim_time: false
+    command_timeout: 0.25
+    future_stamp_tolerance: 0.1
+    output_rate: 20.0
+    throttle_limit: 0.4
+    steering_limit: 0.5
+    watchdog_steering: 0.0
