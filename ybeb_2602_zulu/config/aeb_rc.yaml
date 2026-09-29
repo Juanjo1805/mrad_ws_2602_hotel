@@ -1,0 +1,7 @@
+aeb_node:
+  ros__parameters:
+    ttc_threshold: 0.45
+    clearance_m: 0.45
+    speed_bound_mps: 2.0
+    scan_timeout: 0.4
+    command_timeout: 0.3

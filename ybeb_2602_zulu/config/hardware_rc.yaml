@@ -1,9 +1,12 @@
 ybeb_node:
   ros__parameters:
-    use_sim_time: false
     command_timeout: 0.25
-    future_stamp_tolerance: 0.1
-    output_rate: 20.0
     throttle_limit: 0.4
     steering_limit: 0.5
-    watchdog_steering: 0.0
+    throttle_center: 91.0
+    throttle_gain: 27.0
+    # Calibracion fisica encontrada en la copia Pi safety_core.py.
+    steering_left: 74.0
+    steering_center: 103.0
+    steering_right: 129.0
+    aux_servo_2: 111.0

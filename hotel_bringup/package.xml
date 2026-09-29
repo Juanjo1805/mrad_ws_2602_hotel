@@ -28,9 +28,6 @@
   <exec_depend>teleop_twist_joy</exec_depend>
   <exec_depend>twist_mux</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
-  <exec_depend>ybeb_2602_zulu</exec_depend>
-  <exec_depend>hotel_wall_following</exec_depend>
-  <exec_depend>hotel_ttc_follow_the_gap</exec_depend>
   <test_depend>python3-yaml</test_depend>
 
   <export>

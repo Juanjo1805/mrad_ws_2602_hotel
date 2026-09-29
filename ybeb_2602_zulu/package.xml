@@ -3,7 +3,7 @@
 <package format="3">
   <name>ybeb_2602_zulu</name>
   <version>0.0.0</version>
-  <description>RC guarded Rosmaster interface and shared safety contracts</description>
+  <description>Simple Raspberry RC AEB and Rosmaster interface</description>
   <maintainer email="rpi5master@todo.todo">rpi5master</maintainer>
   <license>TODO: License declaration</license>
 
@@ -18,10 +18,6 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>rplidar_ros</exec_depend>
   <exec_depend>python3-serial</exec_depend>
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

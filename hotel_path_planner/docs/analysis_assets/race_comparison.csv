@@ -1,0 +1,14 @@
+metric,unit,run_001,run_002,run_002_minus_run_001,source
+total_time_s,s,755.031,455.6400000000001,-299.39099999999985,results.yaml + monitor_trace.csv
+lap_1_time_s,s,381.35100000000006,231.80000000000004,-149.55100000000002,results.yaml + monitor_trace.csv
+lap_2_time_s,s,373.64,223.80000000000007,-149.83999999999992,results.yaml + monitor_trace.csv
+mean_sampled_velocity_m_s,m/s,0.3597324980406565,0.6216629330921135,0.261930435051457,results.yaml + monitor_trace.csv
+maximum_velocity_m_s,m/s,0.4503583666840018,0.9099530090804613,0.4595946423964595,results.yaml + monitor_trace.csv
+lateral_rmse_m,m,0.10232900014482835,0.06257158745791594,-0.03975741268691241,results.yaml + monitor_trace.csv
+lateral_max_error_m,m,0.5639610254414291,0.26877202004539275,-0.2951890053960364,results.yaml + monitor_trace.csv
+distance_travelled_m,m,272.1641490691913,283.80592373849515,11.641774669303857,results.yaml + monitor_trace.csv
+aeb_active_time_s,s,0.7599999999999909,0.0,-0.7599999999999909,results.yaml + monitor_trace.csv
+aeb_events,count,1,0,-1,results.yaml + monitor_trace.csv
+minimum_lidar_distance_m,m,0.51023930311203,0.8391306400299072,0.3288913369178772,results.yaml + monitor_trace.csv
+path_progress_percent,%,99.86796036940027,99.90166383936129,0.03370346996102569,results.yaml + monitor_trace.csv
+time_reduction,%,0.0,39.65280895751298,39.65280895751298,cálculo end-to-end; paths no idénticos

@@ -1,0 +1,19 @@
+parameter,value,function,source
+corridor_half_width,0.35 m,0.20 m robot half-width + 0.15 m margin,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+obstacle_activation_distance,2.20 m,alcance máximo de activación,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+minimum_returns,3,persistencia espacial,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+blocking_persistence,0.30 s,TRACKING→AVOIDING,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+clear_persistence,0.60 s,AVOIDING→REJOINING,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+minimum_avoiding_time,0.80 s,evita conmutación inmediata,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+preview_base,1.10 m,preview dinámico,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+preview_speed_gain,0.55 s,término lineal con velocidad,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+preview_range,1.00–2.50 m,clamp,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+braking_deceleration,1.40 m/s²,distancia de frenado,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+ftg_fov,120 deg,sector frontal,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+ftg_bubble_radius,0.35 m,bubble base,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+ftg_min_gap_width,0.55 m,ancho físico mínimo,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+ftg_max_linear_speed,0.68 m/s,mando reactivo,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+ftg_max_angular_speed,2.00 rad/s,mando reactivo,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+rejoin_max_linear_speed,0.68 m/s,límite temporal,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+rejoin_lateral_error,0.15 m,condición estable,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml
+rejoin_heading_error,0.22 rad,condición estable,hotel_ttc_follow_the_gap/config/reactive_avoidance.yaml

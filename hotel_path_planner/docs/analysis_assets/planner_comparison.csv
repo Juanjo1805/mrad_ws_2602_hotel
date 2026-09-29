@@ -1,0 +1,14 @@
+metric,unit,dijkstra,hybrid_astar,observation
+planning_time_open,ms,153.33907,27.370183666666666,media offline n=3
+path_length_open,m,5.648528,5.398295999999999,mismo escenario y OccupancyGrid
+terminal_yaw_error_open,rad,0.7853980000000002,0.0,orientación no pertenece al estado Dijkstra
+planning_time_orientation_change,ms,176.901796,259.5704856666667,media offline n=3
+path_length_orientation_change,m,5.794113,5.399148,mismo escenario y OccupancyGrid
+terminal_yaw_error_orientation_change,rad,2.356194,0.0,orientación no pertenece al estado Dijkstra
+planning_time_narrow,ms,310.0534626666667,565.620883,media offline n=3
+path_length_narrow,m,8.926346,8.597443,mismo escenario y OccupancyGrid
+terminal_yaw_error_narrow,rad,2.356194,0.0,orientación no pertenece al estado Dijkstra
+planning_time_obstacle_manoeuvre,ms,220.44279666666668,964.1849916666666,media offline n=3
+path_length_obstacle_manoeuvre,m,8.294113,7.797443,mismo escenario y OccupancyGrid
+terminal_yaw_error_obstacle_manoeuvre,rad,0.7853980000000002,0.0,orientación no pertenece al estado Dijkstra
+gazebo_straight_planning_time,ms,16.880565,0.7064219999999999,"tramo recto abierto, n=3"

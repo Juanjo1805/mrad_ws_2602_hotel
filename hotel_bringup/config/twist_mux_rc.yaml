@@ -1,21 +1,8 @@
 twist_mux:
   ros__parameters:
-    use_sim_time: false
     use_stamped: true
     topics:
       joystick:
         topic: /cmd_vel_joy
-        priority: 200
-        timeout: 0.5
-      gap:
-        topic: /cmd_vel_gap
-        priority: 150
-        timeout: 0.5
-      wall:
-        topic: /cmd_vel_wall
-        priority: 120
-        timeout: 0.5
-      navigation:
-        topic: /cmd_vel_nav
         priority: 100
         timeout: 0.5

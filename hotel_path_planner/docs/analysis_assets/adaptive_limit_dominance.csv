@@ -1,0 +1,5 @@
+limit,seconds,percent,source
+curvature,193.57958829402924,41.872171316998276,native Float32 diagnostics in run_002 MCAP
+preview,259.9744721651077,56.2336955692314,native Float32 diagnostics in run_002 MCAP
+omega,0.050690293312072754,0.010964547783044691,native Float32 diagnostics in run_002 MCAP
+lateral_error,8.706092476844788,1.8831685659872786,native Float32 diagnostics in run_002 MCAP

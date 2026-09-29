@@ -11,10 +11,9 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml', 'README.md']),
+        ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name,'config'), glob('config/*.*')),
         (os.path.join('share', package_name,'launch'), glob('launch/*.*')),
-        (os.path.join('share', package_name, 'docs'), glob('docs/*.md')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -31,7 +30,6 @@ setup(
         'console_scripts': [
             'aeb_legacy_node=hotel_bringup.aeb_legacy_node:main',
             'twist_key_to_stamped=hotel_bringup.twist_key_to_stamped:main',
-            'aeb_node=hotel_bringup.aeb_node:main',
             'lidar_data=hotel_bringup.lidar_data:main',
         ],
     },

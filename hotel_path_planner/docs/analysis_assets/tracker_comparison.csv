@@ -1,0 +1,9 @@
+metric,unit,pure_pursuit,lqr,observation
+cte_rmse_m,m,0.012474,0.015519,"Gazebo recto controlado, n=1"
+cte_max_m,m,0.019694,0.020000,"Gazebo recto controlado, n=1"
+heading_rmse_rad,rad,0.012615,0.015160,"Gazebo recto controlado, n=1"
+completion_time_s,s,1.974357,1.754421,"Gazebo recto controlado, n=1"
+final_goal_error_m,m,0.260178,0.236504,"Gazebo recto controlado, n=1"
+mean_abs_delta_omega_rad_s,rad/s,0.000326,0.002078,"suavidad discreta del comando, n=1"
+progress_percent,%,100.000,100.000,ambos llegaron al goal
+omega_saturations,count,0,0,sin saturación
