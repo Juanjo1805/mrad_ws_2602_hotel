@@ -1,0 +1,17 @@
+gap_rc:
+  ros__parameters:
+    # En /scan de ESTE carro el frente es 180 grados; no girar el LiDAR otra vez.
+    front_angle_deg: 180.0
+    fov_deg: 120.0                 # sector frontal total: +/-60 grados
+    min_clearance: 0.75           # m; rayos menores no forman un gap seguro
+    bubble_radius: 0.35           # m; margen angular sobre obstaculo cercano
+    bubble_trigger_distance: 1.0  # m; distancia para activar la burbuja
+    min_gap_width_deg: 12.0       # ancho angular minimo del hueco
+    smooth_alpha: 0.2             # 0 sin suavizado, cercano a 1 mas lento
+    steering_gain: 1.5            # convierte angulo del gap en giro RC
+    steering_sign: 1.0            # +1 normal, -1 si el giro fisico es inverso
+    angle_deadband: 0.05          # rad; ignora errores angulares pequenos
+    max_steering: 0.5             # contrato RC: angular.z <= 0.5
+    max_velocity: 0.30            # throttle RC maximo; <= 0.4
+    min_velocity: 0.25            # throttle RC minimo con gap valido
+    steering_slowdown: 1.5        # reduce throttle al girar

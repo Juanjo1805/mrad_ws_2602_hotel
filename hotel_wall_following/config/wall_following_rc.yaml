@@ -1,0 +1,16 @@
+wall_rc:
+  ros__parameters:
+    # En /scan de ESTE carro el frente es 180° (igual que en el AEB de la Pi).
+    # Pared derecha: rayos +90° y +138°. No cambia ni republica /scan.
+    front_angle_deg: 180.0
+    desired_distance: 1.0 # m; valor Hotel original
+    theta_deg: 48.0
+    lookahead_dist: 1.5     # m; valor Hotel original
+    kp: 1.5                 # PD del launch Hotel original
+    kd: 0.40
+    kv: 2.1                 # reduce velocidad al crecer el error
+    # Provisionales: 0.10 fue insuficiente; el mando manual admite hasta 0.40.
+    max_velocity: 0.15     # throttle maximo al estar alineado; <= 0.4
+    min_velocity: 0.08
+    max_steering: 0.5       # contrato RC: angular.z en [-0.5, 0.5]
+    steering_sign: 1.0      # +1: pared derecha cercana -> angular.z positivo
